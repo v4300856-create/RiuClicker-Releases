@@ -17,16 +17,15 @@ jobs:
       - name: Download prepared builds
         shell: pwsh
         run: |
-          $url = 'https://sdmntpritalynorth.oaiusercontent.com/files/00000000-8708-8246-b32e-8849b5269eec/raw?se=2026-08-17T05%3A38%3A46Z&sp=r&sv=2026-02-06&sr=b&scid=650c16fe-bb27-5dd7-a199-729d55490a72&skoid=a0b9f82a-c86e-4064-a822-2aa38890bb37&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T03%3A48%3A07Z&ske=2026-08-18T03%3A48%3A07Z&sks=b&skv=2026-02-06&sig=lNV/7rxyHJOyCpyxuR7j7GAAJF3%2BqbFPS9nbnBhW%2BAY%3D'
+          $url = 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-61a8-81f4-bc2b-69aec457b9ae/raw?se=2026-08-17T11%3A18%3A41Z&sp=r&sv=2026-02-06&sr=b&scid=a14574c8-9345-5eab-9b78-e010c7e44798&skoid=82a3371f-2f6c-4f81-8a78-2701b362559b&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-16T19%3A40%3A33Z&ske=2026-08-17T19%3A40%3A33Z&sks=b&skv=2026-02-06&sig=jIHJWen4CloharFlix4vEmHLgFNFY8L9ZE7yYuHtF8Q%3D'
           Invoke-WebRequest -Uri $url -OutFile builds.zip
           Expand-Archive builds.zip -DestinationPath builds -Force
-          Get-ChildItem builds -Recurse | Format-Table FullName,Length
-          if (-not (Test-Path 'builds/RiuClicker-5.14.exe')) { throw 'RiuClicker missing' }
-          if (-not (Test-Path 'builds/StrawberryClicker-5.14.exe')) { throw 'StrawberryClicker missing' }
+          if (-not (Test-Path 'builds/RiuClicker-5.15.exe')) { throw 'RiuClicker missing' }
+          if (-not (Test-Path 'builds/StrawberryClicker-5.15.exe')) { throw 'StrawberryClicker missing' }
       - name: Create public release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete v5.14 --yes 2>$null
-          gh release create v5.14 builds/RiuClicker-5.14.exe builds/StrawberryClicker-5.14.exe --title 'Riu + Strawberry Clicker 5.14' --notes 'Windows builds of Riu Clicker 5.14 and Strawberry Clicker 5.14.'
+          gh release delete v5.15 --yes 2>$null
+          gh release create v5.15 builds/RiuClicker-5.15.exe builds/StrawberryClicker-5.15.exe --title 'Riu + Strawberry Clicker 5.15' --notes 'Modern UI update with customizable text color.'
