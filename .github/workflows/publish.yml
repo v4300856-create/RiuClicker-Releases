@@ -20,30 +20,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download 5.17 build artifact
+      - name: Download 5.18 Aurora build artifact
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh api "/repos/${{ github.repository }}/actions/artifacts/9338715539/zip" > artifact.zip
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download build artifact' }
-
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9343075642/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download 5.18 build artifact' }
           Expand-Archive artifact.zip -DestinationPath artifact -Force
 
-          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.17.exe' | Select-Object -First 1
-          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.17.exe' | Select-Object -First 1
-          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.17.zip' | Select-Object -First 1
+          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.18.exe' | Select-Object -First 1
+          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.18.exe' | Select-Object -First 1
+          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.18.zip' | Select-Object -First 1
 
-          if (-not $riu) { throw 'RiuClicker-5.17.exe missing' }
-          if (-not $strawberry) { throw 'StrawberryClicker-5.17.exe missing' }
+          if (-not $riu) { throw 'RiuClicker-5.18.exe missing' }
+          if (-not $strawberry) { throw 'StrawberryClicker-5.18.exe missing' }
 
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item $riu.FullName 'release/RiuClicker-5.17.exe'
-          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.17.exe'
-          if ($bundle) { Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.17.zip' }
+          Copy-Item $riu.FullName 'release/RiuClicker-5.18.exe'
+          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.18.exe'
+          if ($bundle) { Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.18.zip' }
 
-      - name: Create or update public release 5.17
+      - name: Create or update public release 5.18
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,29 +51,29 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $false
 
           @'
-          Wallhop stability + UI refresh.
+          Aurora UI overhaul + Wallhop stability.
 
           Changes:
-          - Fixed wallhop overlap on rapid repeated hotkey presses.
-          - Camera return is guaranteed after the wallhop movement sequence.
-          - Relative mouse movement uses no-coalescing for more stable short bursts.
-          - Refreshed dark interface and dropdown styling.
-          - Wallhop presets now show actual pixel movement values.
-          - Added clearer wallhop status in the interface.
+          - Completely redesigned Aurora Dark interface.
+          - Replaced the native white/blue Windows dropdown with a fully custom dark ComboBox.
+          - New rounded dropdown popup, hover and selected states, custom arrow and shadow.
+          - Redesigned sidebar, title bar, cards, buttons, toggles, text fields, sliders, lists and scrollbars.
+          - Improved Wallhop panel and status visibility.
+          - Keeps the 5.17 wallhop stability fixes: overlap protection, guaranteed camera return and no-coalescing mouse movement.
           '@ | Set-Content release-notes.md
 
-          $assets = @('release/RiuClicker-5.17.exe', 'release/StrawberryClicker-5.17.exe')
-          if (Test-Path 'release/Riu-and-Strawberry-5.17.zip') { $assets += 'release/Riu-and-Strawberry-5.17.zip' }
+          $assets = @('release/RiuClicker-5.18.exe', 'release/StrawberryClicker-5.18.exe')
+          if (Test-Path 'release/Riu-and-Strawberry-5.18.zip') { $assets += 'release/Riu-and-Strawberry-5.18.zip' }
 
-          gh release view v5.17 --json tagName *> $null
+          gh release view v5.18 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload v5.17 $assets --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.17 assets' }
-            gh release edit v5.17 --title 'Riu + Strawberry Clicker 5.17' --notes-file release-notes.md
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.17 release notes' }
+            gh release upload v5.18 $assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.18 assets' }
+            gh release edit v5.18 --title 'Riu + Strawberry Clicker 5.18 · Aurora UI' --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.18 release notes' }
           } else {
-            gh release create v5.17 $assets --title 'Riu + Strawberry Clicker 5.17' --notes-file release-notes.md --target main
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.17 release' }
+            gh release create v5.18 $assets --title 'Riu + Strawberry Clicker 5.18 · Aurora UI' --notes-file release-notes.md --target main
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.18 release' }
           }
 
       - name: Verify public release
@@ -83,11 +82,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $release = gh release view v5.17 --json tagName,name,url,assets | ConvertFrom-Json
-          if ($release.tagName -ne 'v5.17') { throw 'Wrong release tag' }
+          $release = gh release view v5.18 --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'v5.18') { throw 'Wrong release tag' }
           $names = @($release.assets | ForEach-Object { $_.name })
-          if ('RiuClicker-5.17.exe' -notin $names) { throw 'Riu asset missing from release' }
-          if ('StrawberryClicker-5.17.exe' -notin $names) { throw 'Strawberry asset missing from release' }
+          if ('RiuClicker-5.18.exe' -notin $names) { throw 'Riu asset missing from release' }
+          if ('StrawberryClicker-5.18.exe' -notin $names) { throw 'Strawberry asset missing from release' }
           Write-Host "Verified: $($release.url)"
 
       - name: Report publish status
@@ -99,11 +98,11 @@ jobs:
           status=$status
           run_id=${{ github.run_id }}
           commit=${{ github.sha }}
-          tag=v5.17
-          "@ | Set-Content publish-5.17-status.txt
+          tag=v5.18
+          "@ | Set-Content publish-5.18-status.txt
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add publish-5.17-status.txt
-          git commit -m "Record 5.17 publish status" 2>$null
+          git add publish-5.18-status.txt
+          git commit -m "Record 5.18 publish status" 2>$null
           if ($LASTEXITCODE -eq 0) { git push }
