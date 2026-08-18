@@ -8,24 +8,51 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   publish:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download prepared builds
-        shell: pwsh
-        run: |
-          $url = 'https://sdmntprnortheu.oaiusercontent.com/files/00000000-8fe0-81f4-bd5d-d241320110d6/raw?se=2026-08-17T20%3A06%3A55Z&sp=r&sv=2026-02-06&sr=b&scid=75bf947f-dd0b-524b-acab-d4d0c982ea33&skoid=a3a8eefe-d4bd-4909-ab1d-2a75a2302fac&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-08-17T07%3A28%3A56Z&ske=2026-08-18T07%3A28%3A56Z&sks=b&skv=2026-02-06&sig=pqzzED4UiC7hMefLI8V8QdSJ3CxQ7XAMlgFr7aGHEw8%3D'
-          Invoke-WebRequest -Uri $url -OutFile builds.zip
-          Expand-Archive builds.zip -DestinationPath builds -Force
-          if (-not (Test-Path 'builds/RiuClicker-5.16.exe')) { throw 'RiuClicker missing' }
-          if (-not (Test-Path 'builds/StrawberryClicker-5.16.exe')) { throw 'StrawberryClicker missing' }
-      - name: Create public release
+
+      - name: Download 5.17 build artifact
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete v5.16 --yes 2>$null
-          gh release create v5.16 builds/RiuClicker-5.16.exe builds/StrawberryClicker-5.16.exe --title 'Riu + Strawberry Clicker 5.16' --notes 'UI fix: readable dark dropdown lists and expanded RU/EN localization.'
+          gh api -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/artifacts/9338715539/zip > artifact.zip
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+
+          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.17.exe' | Select-Object -First 1
+          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.17.exe' | Select-Object -First 1
+          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.17.zip' | Select-Object -First 1
+
+          if (-not $riu) { throw 'RiuClicker-5.17.exe missing' }
+          if (-not $strawberry) { throw 'StrawberryClicker-5.17.exe missing' }
+
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Copy-Item $riu.FullName 'release/RiuClicker-5.17.exe'
+          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.17.exe'
+          if ($bundle) { Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.17.zip' }
+
+      - name: Create public release 5.17
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete v5.17 --yes 2>$null
+          $assets = @('release/RiuClicker-5.17.exe', 'release/StrawberryClicker-5.17.exe')
+          if (Test-Path 'release/Riu-and-Strawberry-5.17.zip') { $assets += 'release/Riu-and-Strawberry-5.17.zip' }
+          gh release create v5.17 $assets --title 'Riu + Strawberry Clicker 5.17' --notes @'
+          Wallhop stability + UI refresh.
+
+          Changes:
+          - Fixed wallhop overlap on rapid repeated hotkey presses.
+          - Camera return is guaranteed after the wallhop movement sequence.
+          - Relative mouse movement uses no-coalescing for more stable short bursts.
+          - Refreshed dark interface and dropdown styling.
+          - Wallhop presets now show actual pixel movement values.
+          - Added clearer wallhop status in the interface.
+          '@
