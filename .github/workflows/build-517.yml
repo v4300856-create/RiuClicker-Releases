@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -73,3 +73,22 @@ jobs:
             out/StrawberryClicker-5.17.exe
             out/Riu-Strawberry-5.17-Source.zip
             out/Riu-and-Strawberry-5.17.zip
+
+      - name: Report build status
+        if: always()
+        shell: pwsh
+        env:
+          RUN_ID: ${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          New-Item -ItemType Directory -Path .build -Force | Out-Null
+          @(
+            "run_id=$env:RUN_ID"
+            "job_status=$env:JOB_STATUS"
+            "commit=${{ github.sha }}"
+          ) | Set-Content .build/build517-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .build/build517-status.txt
+          git commit -m "CI: report 5.17 build $env:JOB_STATUS" || exit 0
+          git push origin HEAD:fix/wallhop-ui-5.17
