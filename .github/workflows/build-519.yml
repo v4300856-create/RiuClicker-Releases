@@ -38,9 +38,9 @@ jobs:
       - name: Static version check
         shell: pwsh
         run: |
-          if (-not (Select-String src/RiuClickerCS.csproj '<Version>5.19.0</Version>')) { throw '5.19 project version missing' }
-          if (-not (Select-String src/MainWindow.xaml 'NOVA CONTROL')) { throw 'Nova UI marker missing' }
-          if (-not (Select-String src/MainWindow.xaml 'PageHome')) { throw 'Home dashboard missing' }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.19.0</Version>' -SimpleMatch)) { throw '5.19 project version missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'NOVA CONTROL' -SimpleMatch)) { throw 'Nova UI marker missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'PageHome' -SimpleMatch)) { throw 'Home dashboard missing' }
 
       - name: Build Riu
         shell: pwsh
