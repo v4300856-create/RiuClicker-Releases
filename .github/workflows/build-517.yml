@@ -6,6 +6,11 @@ on:
     paths:
       - '.build/source517.part*'
       - '.github/workflows/build-517.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - '.build/source517.part*'
+      - '.github/workflows/build-517.yml'
   workflow_dispatch:
 
 permissions:
@@ -75,7 +80,7 @@ jobs:
             out/Riu-and-Strawberry-5.17.zip
 
       - name: Report build status
-        if: always()
+        if: always() && github.event_name == 'push'
         shell: pwsh
         env:
           RUN_ID: ${{ github.run_id }}
