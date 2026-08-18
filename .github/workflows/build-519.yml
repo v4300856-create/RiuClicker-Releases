@@ -1,4 +1,3 @@
-# Nova 5.19 verified-build trigger
 name: Build 5.19 Nova
 
 on:
@@ -40,14 +39,14 @@ jobs:
           $xaml = Get-Content $path -Raw
           $needle = '                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>'
           if (-not $xaml.Contains($needle)) { throw 'Wallhop insertion point missing' }
-          $controls = @'
-                                            <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                                                <StackPanel Margin="0,0,6,0"><TextBlock Text="Пакетов движения" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopSmoothSteps" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="1 = резкий рывок, 2–6 = плавнее"/></StackPanel>
-                                                <StackPanel Grid.Column="1" Margin="6,0,0,0"><TextBlock Text="Длительность рывка, мс" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopFlickDuration" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="0 = максимально быстро"/></StackPanel>
-                                            </Grid>
-                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>
-'@
-          $xaml = $xaml.Replace($needle, $controls.TrimEnd())
+          $controls = @(
+            '                                            <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>',
+            '                                                <StackPanel Margin="0,0,6,0"><TextBlock Text="Пакетов движения" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopSmoothSteps" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="1 = резкий рывок, 2–6 = плавнее"/></StackPanel>',
+            '                                                <StackPanel Grid.Column="1" Margin="6,0,0,0"><TextBlock Text="Длительность рывка, мс" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopFlickDuration" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="0 = максимально быстро"/></StackPanel>',
+            '                                            </Grid>',
+            '                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>'
+          ) -join "`r`n"
+          $xaml = $xaml.Replace($needle, $controls)
           Set-Content -Path $path -Value $xaml -Encoding utf8
 
       - uses: actions/setup-dotnet@v4
