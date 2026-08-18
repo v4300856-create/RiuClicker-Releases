@@ -20,9 +20,18 @@ jobs:
       - name: Reconstruct source
         shell: pwsh
         run: |
-          $parts = Get-ChildItem .build/source518.part* | Sort-Object Name
-          if ($parts.Count -ne 5) { throw "Expected 5 source chunks, found $($parts.Count)" }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $names = @(
+            '.build/source518.part00',
+            '.build/source518.part01',
+            '.build/source518.part02',
+            '.build/source518.part02tail',
+            '.build/source518.part03',
+            '.build/source518.part04'
+          )
+          foreach ($name in $names) {
+            if (-not (Test-Path $name)) { throw "Missing source chunk: $name" }
+          }
+          $b64 = ($names | ForEach-Object { Get-Content $_ -Raw }) -join ''
           [IO.File]::WriteAllBytes("source518.zip", [Convert]::FromBase64String($b64))
           Expand-Archive -Path source518.zip -DestinationPath src -Force
           if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Project file missing after source reconstruction' }
