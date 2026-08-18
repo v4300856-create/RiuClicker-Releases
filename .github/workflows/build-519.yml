@@ -31,6 +31,24 @@ jobs:
           Expand-Archive source519.zip -DestinationPath src -Force
           if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'csproj missing' }
 
+      - name: Complete Nova Wallhop UI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'src/MainWindow.xaml'
+          $xaml = Get-Content $path -Raw
+          $needle = '                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>'
+          if (-not $xaml.Contains($needle)) { throw 'Wallhop insertion point missing' }
+          $controls = @'
+                                            <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                                <StackPanel Margin="0,0,6,0"><TextBlock Text="Пакетов движения" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopSmoothSteps" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="1 = резкий рывок, 2–6 = плавнее"/></StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="6,0,0,0"><TextBlock Text="Длительность рывка, мс" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopFlickDuration" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="0 = максимально быстро"/></StackPanel>
+                                            </Grid>
+                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>
+'@
+          $xaml = $xaml.Replace($needle, $controls.TrimEnd())
+          Set-Content -Path $path -Value $xaml -Encoding utf8
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -41,6 +59,8 @@ jobs:
           if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.19.0</Version>' -SimpleMatch)) { throw '5.19 project version missing' }
           if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'NOVA CONTROL' -SimpleMatch)) { throw 'Nova UI marker missing' }
           if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'PageHome' -SimpleMatch)) { throw 'Home dashboard missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'WallhopSmoothSteps' -SimpleMatch)) { throw 'Wallhop smooth control missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'WallhopFlickDuration' -SimpleMatch)) { throw 'Wallhop duration control missing' }
 
       - name: Build Riu
         shell: pwsh
@@ -74,6 +94,7 @@ jobs:
           foreach ($f in $files) {
             if (-not (Test-Path $f)) { throw "$f missing" }
             if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
+            Write-Host "$f = $((Get-Item $f).Length) bytes"
           }
 
       - name: Package source and builds
