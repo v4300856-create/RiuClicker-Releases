@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.build/final520.part*'
+      - '.build/localization520-hotfix.py'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -62,6 +63,14 @@ jobs:
             if ($hash -ne $expected[$name]) { throw "$name hash mismatch: $hash" }
           }
 
+      - name: Fix mixed-language localization
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          if (-not (Select-String -Path 'src/Localization.cs' -Pattern 'localizedFromEnglish' -SimpleMatch)) { throw 'Localization hotfix marker missing' }
+
       - name: Static localization and feature checks
         shell: pwsh
         run: |
@@ -70,7 +79,7 @@ jobs:
           foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
             if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
           }
-          foreach ($marker in @('Українська','简体中文','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей')) {
+          foreach ($marker in @('Українська','简体中文','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей','localizedFromEnglish')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Feature marker missing: $marker" }
           }
 
