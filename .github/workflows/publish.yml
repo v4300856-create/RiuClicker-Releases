@@ -20,33 +20,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download verified 5.19 build artifact
+      - name: Download verified 5.20 final artifact
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh api "/repos/${{ github.repository }}/actions/artifacts/9344133447/zip" > artifact.zip
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.19 build artifact' }
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.20 final artifact' }
           Expand-Archive artifact.zip -DestinationPath artifact -Force
 
-          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.19.exe' | Select-Object -First 1
-          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.19.exe' | Select-Object -First 1
-          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.19.zip' | Select-Object -First 1
-          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.19-Source.zip' | Select-Object -First 1
+          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.20.exe' | Select-Object -First 1
+          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.20.exe' | Select-Object -First 1
+          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.20.zip' | Select-Object -First 1
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
 
-          if (-not $riu) { throw 'RiuClicker-5.19.exe missing' }
-          if (-not $strawberry) { throw 'StrawberryClicker-5.19.exe missing' }
-          if (-not $bundle) { throw '5.19 bundle missing' }
-          if (-not $source) { throw '5.19 source bundle missing' }
+          if (-not $riu) { throw 'RiuClicker-5.20.exe missing' }
+          if (-not $strawberry) { throw 'StrawberryClicker-5.20.exe missing' }
+          if (-not $bundle) { throw '5.20 bundle missing' }
+          if (-not $source) { throw '5.20 source bundle missing' }
 
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item $riu.FullName 'release/RiuClicker-5.19.exe'
-          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.19.exe'
-          Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.19.zip'
-          Copy-Item $source.FullName 'release/Riu-Strawberry-5.19-Source.zip'
+          Copy-Item $riu.FullName 'release/RiuClicker-5.20.exe'
+          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.20.exe'
+          Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.20.zip'
+          Copy-Item $source.FullName 'release/Riu-Strawberry-5.20-Source.zip'
 
-      - name: Create or update public release 5.19
+      - name: Create or update public release 5.20
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,38 +54,36 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $false
           @(
-            'Nova Control usability update.',
+            'Riu + Strawberry Clicker 5.20 — localization and visual polish.',
             '',
             'Changes:',
-            '- New Home / Nova Control Center with live clicker, wallhop and macro status.',
-            '- Quick start/stop for both clickers plus safe single-click testing.',
-            '- Coordinate mode refuses to start without a valid saved point.',
-            '- Dual-clicker profile bundles: save/apply Clicker 1, Clicker 2 or both.',
-            '- Hotkey conflict detection prevents accidental duplicate bindings.',
-            '- Wallhop queue keeps a fast second trigger instead of dropping it.',
-            '- Wallhop smooth movement packets, configurable flick duration and exact camera return.',
-            '- Macro recorder preserves real input pauses and macros can be duplicated.',
-            '- Settings export/import, full reset, settings-folder shortcut and remembered window placement.',
-            '- Custom Aurora/Nova dark interface retained: no native white/blue Windows dropdown.',
-            '- F12 emergency stop remains available globally.'
+            '- Full interface localization: Русский, English, Українська, 简体中文, Deutsch, Español, Français and Polski.',
+            '- Language switching covers navigation, controls, statuses, hints and system messages.',
+            '- New panel/card transparency control so the background image can stay visible.',
+            '- Riu Clicker now uses a rotating 3D Riu brand visual.',
+            '- StrawberryClicker now uses a rotating 3D strawberry with modeled body, seeds, leaves and stem.',
+            '- 3D branding respects animation and low-end performance settings.',
+            '- Nova Control usability, macro/profile tools, hotkey checks and emergency stop from 5.19 are retained.',
+            '- Wallhop stability improvements and queued fast retrigger behavior are retained.',
+            '- Both Windows x64 builds were compiled and verified in CI before publication.'
           ) | Set-Content release-notes.md
 
           $assets = @(
-            'release/RiuClicker-5.19.exe',
-            'release/StrawberryClicker-5.19.exe',
-            'release/Riu-and-Strawberry-5.19.zip',
-            'release/Riu-Strawberry-5.19-Source.zip'
+            'release/RiuClicker-5.20.exe',
+            'release/StrawberryClicker-5.20.exe',
+            'release/Riu-and-Strawberry-5.20.zip',
+            'release/Riu-Strawberry-5.20-Source.zip'
           )
 
-          gh release view v5.19 --json tagName *> $null
+          gh release view v5.20 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload v5.19 $assets --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.19 assets' }
-            gh release edit v5.19 --title 'Riu + Strawberry Clicker 5.19 · Nova Control' --notes-file release-notes.md --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.19 release' }
+            gh release upload v5.20 $assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.20 assets' }
+            gh release edit v5.20 --title 'Riu + Strawberry Clicker 5.20 · 3D & Localization' --notes-file release-notes.md --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.20 release' }
           } else {
-            gh release create v5.19 $assets --title 'Riu + Strawberry Clicker 5.19 · Nova Control' --notes-file release-notes.md --target main --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.19 release' }
+            gh release create v5.20 $assets --title 'Riu + Strawberry Clicker 5.20 · 3D & Localization' --notes-file release-notes.md --target main --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.20 release' }
           }
 
       - name: Verify public release
@@ -94,10 +92,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $release = gh release view v5.19 --json tagName,name,url,assets | ConvertFrom-Json
-          if ($release.tagName -ne 'v5.19') { throw 'Wrong release tag' }
+          $release = gh release view v5.20 --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'v5.20') { throw 'Wrong release tag' }
           $names = @($release.assets | ForEach-Object { $_.name })
-          foreach ($name in @('RiuClicker-5.19.exe','StrawberryClicker-5.19.exe','Riu-and-Strawberry-5.19.zip','Riu-Strawberry-5.19-Source.zip')) {
+          foreach ($name in @('RiuClicker-5.20.exe','StrawberryClicker-5.20.exe','Riu-and-Strawberry-5.20.zip','Riu-Strawberry-5.20-Source.zip')) {
             if ($name -notin $names) { throw "$name missing from public release" }
           }
           Write-Host "Verified public release: $($release.url)"
@@ -111,11 +109,11 @@ jobs:
             "status=$status",
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
-            'tag=v5.19'
-          ) | Set-Content publish-5.19-status.txt
+            'tag=v5.20'
+          ) | Set-Content publish-5.20-status.txt
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add publish-5.19-status.txt
-          git commit -m "Record 5.19 publish status" 2>$null
+          git add publish-5.20-status.txt
+          git commit -m "Record 5.20 publish status" 2>$null
           if ($LASTEXITCODE -eq 0) { git push }
