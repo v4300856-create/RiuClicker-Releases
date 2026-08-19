@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - '.build/visual520.part*'
+      - '.build/final520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -32,30 +32,35 @@ jobs:
           Expand-Archive $source.FullName -DestinationPath src -Force
           if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.20 source extraction failed' }
 
-      - name: Apply final transparency and 3D branding polish
+      - name: Install exact final 5.20 source files
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem '.build/visual520.part*' | Sort-Object Name
-          if ($parts.Count -ne 4) { throw "Expected 4 visual chunks, found $($parts.Count)" }
+          $parts = Get-ChildItem '.build/final520.part*' | Sort-Object Name
+          if ($parts.Count -ne 11) { throw "Expected 11 final chunks, found $($parts.Count)" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 18072) { throw "Wrong visual base64 length: $($b64.Length)" }
+          if ($b64.Length -ne 60272) { throw "Wrong final base64 length: $($b64.Length)" }
           $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne '4461d43a8ef782d0be932413079b1172aa5a0d9109cf50108cbb616d7a96d54f') { throw "Visual chunk hash mismatch: $b64Hash" }
-          [IO.File]::WriteAllBytes('visual520.gz',[Convert]::FromBase64String($b64))
-          python -c "import gzip,pathlib; pathlib.Path('visual520.diff').write_bytes(gzip.decompress(pathlib.Path('visual520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress visual patch' }
-          $visualHash = (Get-FileHash 'visual520.diff' -Algorithm SHA256).Hash.ToLower()
-          if ($visualHash -ne 'a28599233d6994ca40fd8f7fb637853d0bf5b2ec3e0fc72f13d1483dfe4f464e') { throw "Visual patch hash mismatch: $visualHash" }
-          Push-Location src
-          git init
-          git config user.name 'ci'
-          git config user.email 'ci@example.invalid'
-          git add .
-          git commit -m 'verified green 5.20 source'
-          git apply --whitespace=nowarn ..\visual520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply final visual polish to verified 5.20 source' }
-          Pop-Location
+          if ($b64Hash -ne '96dfbebfc43e1847131a6aa018dbe01923def9c3e206a77badb2ca269c11edd3') { throw "Final chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('final520-files.zip',[Convert]::FromBase64String($b64))
+          $zipHash = (Get-FileHash 'final520-files.zip' -Algorithm SHA256).Hash.ToLower()
+          if ($zipHash -ne '424b77eb36b6951fbd67a4ab8e9aac803f9e2d330599def11148add40a1e90b0') { throw "Final ZIP hash mismatch: $zipHash" }
+          Expand-Archive 'final520-files.zip' -DestinationPath final520 -Force
+          Copy-Item 'final520/*' 'src/' -Force
+
+          $expected = @{
+            'BrandVisual.cs'='337e84dd89c0fe6f3ba9f6f85555eda0a3c2aa47e82b29242b2ef9ee2ee0bb93'
+            'MainWindow.xaml'='e78b577594d90a2b9c24b61253880b2c4823f08d64c54ce13f8b46a1586153cd'
+            'MainWindow.xaml.cs'='1ee55409521058fa00db68fc9325455483cdfdb89daae34a326c370b1c23400f'
+            'MainWindow.Extras.cs'='5b7101a7552f96ebbcac51da32e43c9a28ccbdf18b47e49a1f5c03246f13c49f'
+            'Models.cs'='200351b0a7768e747e3206dc34b6015f0ab292a5b6e78aa0898c583374737b1b'
+            'Localization.cs'='a4a200eb91c2aa1c7d62cdcbdfdd71823721d5af8aee49c35d5f7ce27a3b5449'
+          }
+          foreach ($name in $expected.Keys) {
+            if (-not (Test-Path "src/$name")) { throw "$name missing" }
+            $hash = (Get-FileHash "src/$name" -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne $expected[$name]) { throw "$name hash mismatch: $hash" }
+          }
 
       - name: Static localization and feature checks
         shell: pwsh
