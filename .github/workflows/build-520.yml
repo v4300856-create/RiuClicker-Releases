@@ -39,9 +39,9 @@ jobs:
           $parts = Get-ChildItem '.build/final520.part*' | Sort-Object Name
           if ($parts.Count -ne 11) { throw "Expected 11 final chunks, found $($parts.Count)" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 60272) { throw "Wrong final base64 length: $($b64.Length)" }
+          if ($b64.Length -ne 60416) { throw "Wrong final base64 length: $($b64.Length)" }
           $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne '96dfbebfc43e1847131a6aa018dbe01923def9c3e206a77badb2ca269c11edd3') { throw "Final chunk hash mismatch: $b64Hash" }
+          if ($b64Hash -ne '79f1c00bb2e73b9efafeb90abeaea2225095327d4233fbf6b30099b1b0d5ff08') { throw "Final chunk hash mismatch: $b64Hash" }
           [IO.File]::WriteAllBytes('final520-files.zip',[Convert]::FromBase64String($b64))
           $zipHash = (Get-FileHash 'final520-files.zip' -Algorithm SHA256).Hash.ToLower()
           if ($zipHash -ne '424b77eb36b6951fbd67a4ab8e9aac803f9e2d330599def11148add40a1e90b0') { throw "Final ZIP hash mismatch: $zipHash" }
