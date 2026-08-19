@@ -1,0 +1,151 @@
+name: Build 5.20 Final
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.build/final520.part*'
+      - '.build/localization520-hotfix.py'
+      - '.build/cps520-hotfix.py'
+      - '.github/workflows/build-520.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified green 5.20 source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9357708831/zip" > base520-artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified green 5.20 artifact' }
+          Expand-Archive base520-artifact.zip -DestinationPath base520 -Force
+          $source = Get-ChildItem base520 -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Verified 5.20 source zip missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.20 source extraction failed' }
+
+      - name: Install exact final 5.20 source files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem '.build/final520.part*' | Sort-Object Name
+          if ($parts.Count -ne 11) { throw "Expected 11 final chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 60416) { throw "Wrong final base64 length: $($b64.Length)" }
+          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
+          if ($b64Hash -ne '79f1c00bb2e73b9efafeb90abeaea2225095327d4233fbf6b30099b1b0d5ff08') { throw "Final chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('final520-files.zip',[Convert]::FromBase64String($b64))
+          $zipHash = (Get-FileHash 'final520-files.zip' -Algorithm SHA256).Hash.ToLower()
+          if ($zipHash -ne '424b77eb36b6951fbd67a4ab8e9aac803f9e2d330599def11148add40a1e90b0') { throw "Final ZIP hash mismatch: $zipHash" }
+          Expand-Archive 'final520-files.zip' -DestinationPath final520 -Force
+          Copy-Item 'final520/*' 'src/' -Force
+
+          $expected = @{
+            'BrandVisual.cs'='337e84dd89c0fe6f3ba9f6f85555eda0a3c2aa47e82b29242b2ef9ee2ee0bb93'
+            'MainWindow.xaml'='e78b577594d90a2b9c24b61253880b2c4823f08d64c54ce13f8b46a1586153cd'
+            'MainWindow.xaml.cs'='1ee55409521058fa00db68fc9325455483cdfdb89daae34a326c370b1c23400f'
+            'MainWindow.Extras.cs'='5b7101a7552f96ebbcac51da32e43c9a28ccbdf18b47e49a1f5c03246f13c49f'
+            'Models.cs'='200351b0a7768e747e3206dc34b6015f0ab292a5b6e78aa0898c583374737b1b'
+            'Localization.cs'='a4a200eb91c2aa1c7d62cdcbdfdd71823721d5af8aee49c35d5f7ce27a3b5449'
+          }
+          foreach ($name in $expected.Keys) {
+            if (-not (Test-Path "src/$name")) { throw "$name missing" }
+            $hash = (Get-FileHash "src/$name" -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne $expected[$name]) { throw "$name hash mismatch: $hash" }
+          }
+
+      - name: Fix mixed-language localization
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          if (-not (Select-String -Path 'src/Localization.cs' -Pattern 'localizedFromEnglish' -SimpleMatch)) { throw 'Localization hotfix marker missing' }
+
+      - name: Remove CPS cap and install precise scheduler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+          foreach ($marker in @('NormalizeCps','WaitUntil','nextClickTick','SendMouseClick','Maximum="5000"')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "CPS marker missing: $marker" }
+          }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(settings.Cps, 0.1, 500)' -SimpleMatch) { throw 'Engine 500 CPS clamp still present' }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(c.Cps, 0.1, 500)' -SimpleMatch) { throw 'Settings 500 CPS clamp still present' }
+
+      - name: Static localization and feature checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.20.0</Version>' -SimpleMatch)) { throw '5.20 project version missing' }
+          foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
+            if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
+          }
+          foreach ($marker in @('Українська','简体中文','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей','localizedFromEnglish')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Feature marker missing: $marker" }
+          }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Riu 5.20
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/riu
+          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.20 build failed' }
+          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.20.exe
+
+      - name: Build Strawberry 5.20
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DefineConstants=STRAWBERRY `
+            -p:AssemblyName=StrawberryClicker `
+            -p:ApplicationIcon=strawberry.ico `
+            -o out/strawberry
+          if ($LASTEXITCODE -ne 0) { throw 'Strawberry 5.20 build failed' }
+          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.20.exe
+
+      - name: Verify and package
+        shell: pwsh
+        run: |
+          foreach ($f in @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe')) {
+            if (-not (Test-Path $f)) { throw "$f missing" }
+            if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
+            Write-Host "$f = $((Get-Item $f).Length) bytes"
+          }
+          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.20-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.20.exe package/
+          Copy-Item out/StrawberryClicker-5.20.exe package/
+          Copy-Item out/Riu-Strawberry-5.20-Source.zip package/
+          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.20.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Riu-Strawberry-5.20-final
+          if-no-files-found: error
+          path: |
+            out/RiuClicker-5.20.exe
+            out/StrawberryClicker-5.20.exe
+            out/Riu-Strawberry-5.20-Source.zip
+            out/Riu-and-Strawberry-5.20.zip
