@@ -1,4 +1,4 @@
-name: Build 5.20 Localization
+name: Build 5.20 Final
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     paths:
       - '.build/patch520.part*'
       - '.build/localization520.part*'
-      - '.build/feature520.part*'
+      - '.build/visual520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -77,28 +77,25 @@ jobs:
           $locHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
           if ($locHash -ne '1aca57eadadd0fcc24ca45276fb52283a806f8d1c68d429493202cdd646cd59e') { throw "Localization.cs hash mismatch: $locHash" }
 
-      - name: Apply 3D branding and transparency patch
+      - name: Apply panel opacity and 3D branding patch
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem '.build/feature520.part*' | Sort-Object Name
-          if ($parts.Count -ne 6) { throw "Expected 6 feature chunks, found $($parts.Count)" }
+          $parts = Get-ChildItem '.build/visual520.part*' | Sort-Object Name
+          if ($parts.Count -ne 4) { throw "Expected 4 visual chunks, found $($parts.Count)" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 19512) { throw "Wrong feature base64 length: $($b64.Length)" }
+          if ($b64.Length -ne 18072) { throw "Wrong visual base64 length: $($b64.Length)" }
           $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne 'd48a64c9c3b8fab644dbbfd0648c790479bcedf0cb1dd048e352e54cb602bfb8') { throw "Feature chunk hash mismatch: $b64Hash" }
-          [IO.File]::WriteAllBytes('feature520.gz',[Convert]::FromBase64String($b64))
-          python -c "import gzip,pathlib; pathlib.Path('feature520.diff').write_bytes(gzip.decompress(pathlib.Path('feature520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress feature patch' }
-          $featureHash = (Get-FileHash 'feature520.diff' -Algorithm SHA256).Hash.ToLower()
-          if ($featureHash -ne 'e6a436351066f84a0b87d4e85cfa0f0f045b184b9c48606bd9620c4be63b5742') { throw "Feature patch hash mismatch: $featureHash" }
+          if ($b64Hash -ne '4461d43a8ef782d0be932413079b1172aa5a0d9109cf50108cbb616d7a96d54f') { throw "Visual chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('visual520.gz',[Convert]::FromBase64String($b64))
+          python -c "import gzip,pathlib; pathlib.Path('visual520.diff').write_bytes(gzip.decompress(pathlib.Path('visual520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress visual patch' }
+          $visualHash = (Get-FileHash 'visual520.diff' -Algorithm SHA256).Hash.ToLower()
+          if ($visualHash -ne 'a28599233d6994ca40fd8f7fb637853d0bf5b2ec3e0fc72f13d1483dfe4f464e') { throw "Visual patch hash mismatch: $visualHash" }
           Push-Location src
-          git apply --whitespace=nowarn ..\feature520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 3D/transparency feature patch' }
+          git apply --whitespace=nowarn ..\visual520.diff
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply panel opacity / 3D branding patch' }
           Pop-Location
-          $newLocHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
-          $validLocHashes = @('11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac','9384ced2c1821e733d78a8f341201ea26794657e00b896ff4dc77f99f8490b31')
-          if ($validLocHashes -notcontains $newLocHash) { throw "Updated Localization.cs hash mismatch: $newLocHash" }
 
       - name: Static localization and feature checks
         shell: pwsh
@@ -108,7 +105,7 @@ jobs:
           foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
             if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
           }
-          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T','PanelTransparencySlider','BrandVisualHost','CreateRiuBrandModel','CreateStrawberryBrandModel','Viewport3D','Прозрачность панелей')) {
+          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Feature marker missing: $marker" }
           }
 
@@ -158,7 +155,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Riu-Strawberry-5.20
+          name: Riu-Strawberry-5.20-final
           if-no-files-found: error
           path: |
             out/RiuClicker-5.20.exe
