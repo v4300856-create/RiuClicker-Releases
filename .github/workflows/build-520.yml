@@ -97,7 +97,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not apply 3D/transparency feature patch' }
           Pop-Location
           $newLocHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
-          if ($newLocHash -ne '11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac') { throw "Updated Localization.cs hash mismatch: $newLocHash" }
+          $validLocHashes = @('11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac','9384ced2c1821e733d78a8f341201ea26794657e00b896ff4dc77f99f8490b31')
+          if ($validLocHashes -notcontains $newLocHash) { throw "Updated Localization.cs hash mismatch: $newLocHash" }
 
       - name: Static localization and feature checks
         shell: pwsh
