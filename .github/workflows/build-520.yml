@@ -1,0 +1,124 @@
+name: Build 5.20 Localization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.build/patch520.gz.b64'
+      - '.github/workflows/build-520.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified 5.19 source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9344133447/zip" > base-artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.19 artifact' }
+          Expand-Archive base-artifact.zip -DestinationPath base -Force
+          $source = Get-ChildItem base -Recurse -Filter 'Riu-Strawberry-5.19-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw '5.19 source zip missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.19 source extraction failed' }
+
+      - name: Reconstruct and apply 5.20 localization patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $b64 = Get-Content '.build/patch520.gz.b64' -Raw
+          $compressed = [Convert]::FromBase64String($b64.Trim())
+          $in = New-Object IO.MemoryStream(,$compressed)
+          $gzip = New-Object IO.Compression.GZipStream($in,[IO.Compression.CompressionMode]::Decompress)
+          $out = New-Object IO.MemoryStream
+          $gzip.CopyTo($out)
+          $gzip.Dispose(); $in.Dispose()
+          [IO.File]::WriteAllBytes('patch520.diff',$out.ToArray())
+          $out.Dispose()
+
+          Push-Location src
+          git init
+          git config user.name 'ci'
+          git config user.email 'ci@example.invalid'
+          git add .
+          git commit -m 'verified 5.19 source'
+          git apply --whitespace=nowarn ..\patch520.diff
+          Pop-Location
+
+          if (-not (Test-Path 'src/Localization.cs')) { throw 'Localization.cs missing after patch' }
+
+      - name: Static localization checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.20.0</Version>' -SimpleMatch)) { throw '5.20 project version missing' }
+          foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
+            if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
+          }
+          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T')) {
+            if (-not (Get-ChildItem src -Filter '*.cs' -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Localization marker missing: $marker" }
+          }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Riu 5.20
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/riu
+          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.20 build failed' }
+          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.20.exe
+
+      - name: Build Strawberry 5.20
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DefineConstants=STRAWBERRY `
+            -p:AssemblyName=StrawberryClicker `
+            -p:ApplicationIcon=strawberry.ico `
+            -o out/strawberry
+          if ($LASTEXITCODE -ne 0) { throw 'Strawberry 5.20 build failed' }
+          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.20.exe
+
+      - name: Verify and package
+        shell: pwsh
+        run: |
+          foreach ($f in @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe')) {
+            if (-not (Test-Path $f)) { throw "$f missing" }
+            if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
+            Write-Host "$f = $((Get-Item $f).Length) bytes"
+          }
+          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.20-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.20.exe package/
+          Copy-Item out/StrawberryClicker-5.20.exe package/
+          Copy-Item out/Riu-Strawberry-5.20-Source.zip package/
+          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.20.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Riu-Strawberry-5.20
+          if-no-files-found: error
+          path: |
+            out/RiuClicker-5.20.exe
+            out/StrawberryClicker-5.20.exe
+            out/Riu-Strawberry-5.20-Source.zip
+            out/Riu-and-Strawberry-5.20.zip
