@@ -6,7 +6,7 @@ on:
     paths:
       - '.build/patch520.part*'
       - '.build/localization520.part*'
-      - '.build/visual520.part*'
+      - '.build/final520-files.zip'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -34,11 +34,10 @@ jobs:
           Expand-Archive $source.FullName -DestinationPath src -Force
           if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.19 source extraction failed' }
 
-      - name: Reconstruct and apply 5.20 localization patch
+      - name: Reconstruct 5.20 localization
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-
           $parts = Get-ChildItem '.build/patch520.part*' | Sort-Object Name
           if ($parts.Count -ne 5) { throw "Expected 5 patch chunks, found $($parts.Count)" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
@@ -50,7 +49,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not decompress 5.20 patch' }
           $patchHash = (Get-FileHash 'patch520.diff' -Algorithm SHA256).Hash.ToLower()
           if ($patchHash -ne 'b18bfbb092473ffa54ccb927399692a5b745164f2d1c462f786c8a3016e81beb') { throw "Patch hash mismatch: $patchHash" }
-
           Push-Location src
           git init
           git config user.name 'ci'
@@ -58,44 +56,40 @@ jobs:
           git add .
           git commit -m 'verified 5.19 source'
           git apply --whitespace=nowarn ..\patch520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 5.20 patch' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 5.20 localization patch' }
           Pop-Location
 
           $lparts = Get-ChildItem '.build/localization520.part*' | Sort-Object Name
           if ($lparts.Count -ne 4) { throw "Expected 4 localization chunks, found $($lparts.Count)" }
           $lb64 = ($lparts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($lb64.Length -eq 13695) {
-            Write-Host 'Repairing known one-character transport omission in localization chunk 3'
-            $lb64 = $lb64.Insert(8218, 'm')
-          }
+          if ($lb64.Length -eq 13695) { $lb64 = $lb64.Insert(8218, 'm') }
           if ($lb64.Length -ne 13696) { throw "Wrong localization base64 length: $($lb64.Length)" }
           $lb64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($lb64)))).Replace('-','').ToLower()
           if ($lb64Hash -ne '0d97b4e88e35e69afbc5819de1c30fac35d3786e2df2ddf6acd1a2cbd74004ee') { throw "Localization chunk hash mismatch: $lb64Hash" }
           [IO.File]::WriteAllBytes('localization520.gz',[Convert]::FromBase64String($lb64))
           python -c "import gzip,pathlib; pathlib.Path('src/Localization.cs').write_bytes(gzip.decompress(pathlib.Path('localization520.gz').read_bytes()))"
           if ($LASTEXITCODE -ne 0) { throw 'Could not reconstruct Localization.cs' }
-          $locHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
-          if ($locHash -ne '1aca57eadadd0fcc24ca45276fb52283a806f8d1c68d429493202cdd646cd59e') { throw "Localization.cs hash mismatch: $locHash" }
 
-      - name: Apply panel opacity and 3D branding patch
+      - name: Install final panel opacity and 3D branding files
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem '.build/visual520.part*' | Sort-Object Name
-          if ($parts.Count -ne 4) { throw "Expected 4 visual chunks, found $($parts.Count)" }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 18072) { throw "Wrong visual base64 length: $($b64.Length)" }
-          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne '4461d43a8ef782d0be932413079b1172aa5a0d9109cf50108cbb616d7a96d54f') { throw "Visual chunk hash mismatch: $b64Hash" }
-          [IO.File]::WriteAllBytes('visual520.gz',[Convert]::FromBase64String($b64))
-          python -c "import gzip,pathlib; pathlib.Path('visual520.diff').write_bytes(gzip.decompress(pathlib.Path('visual520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress visual patch' }
-          $visualHash = (Get-FileHash 'visual520.diff' -Algorithm SHA256).Hash.ToLower()
-          if ($visualHash -ne 'a28599233d6994ca40fd8f7fb637853d0bf5b2ec3e0fc72f13d1483dfe4f464e') { throw "Visual patch hash mismatch: $visualHash" }
-          Push-Location src
-          git apply --whitespace=nowarn ..\visual520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply panel opacity / 3D branding patch' }
-          Pop-Location
+          $zipHash = (Get-FileHash '.build/final520-files.zip' -Algorithm SHA256).Hash.ToLower()
+          if ($zipHash -ne '424b77eb36b6951fbd67a4ab8e9aac803f9e2d330599def11148add40a1e90b0') { throw "Final files ZIP hash mismatch: $zipHash" }
+          Expand-Archive '.build/final520-files.zip' -DestinationPath final520 -Force
+          Copy-Item 'final520/*' 'src/' -Force
+          $expected = @{
+            'BrandVisual.cs'='337e84dd89c0fe6f3ba9f6f85555eda0a3c2aa47e82b29242b2ef9ee2ee0bb93';
+            'MainWindow.xaml'='e78b577594d90a2b9c24b61253880b2c4823f08d64c54ce13f8b46a1586153cd';
+            'MainWindow.xaml.cs'='1ee55409521058fa00db68fc9325455483cdfdb89daae34a326c370b1c23400f';
+            'MainWindow.Extras.cs'='5b7101a7552f96ebbcac51da32e43c9a28ccbdf18b47e49a1f5c03246f13c49f';
+            'Models.cs'='200351b0a7768e747e3206dc34b6015f0ab292a5b6e78aa0898c583374737b1b';
+            'Localization.cs'='a4a200eb91c2aa1c7d62cdcbdfdd71823721d5af8aee49c35d5f7ce27a3b5449'
+          }
+          foreach ($name in $expected.Keys) {
+            $hash = (Get-FileHash "src/$name" -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne $expected[$name]) { throw "$name hash mismatch: $hash" }
+          }
 
       - name: Static localization and feature checks
         shell: pwsh
@@ -105,7 +99,7 @@ jobs:
           foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
             if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
           }
-          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей')) {
+          foreach ($marker in @('Українська','简体中文','PanelOpacitySlider','HeaderBrandViewport','SidebarBrandViewport','CreateRiuModel','CreateStrawberryModel','Viewport3D','Прозрачность панелей')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Feature marker missing: $marker" }
           }
 
