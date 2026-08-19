@@ -6,7 +6,8 @@ on:
     paths:
       - '.build/patch520.part*'
       - '.build/localization520.part*'
-      - '.build/final520-files.zip'
+      - '.build/feature520.part*'
+      - '.build/visual520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -34,7 +35,7 @@ jobs:
           Expand-Archive $source.FullName -DestinationPath src -Force
           if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.19 source extraction failed' }
 
-      - name: Reconstruct 5.20 localization
+      - name: Reconstruct and apply 5.20 localization
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -70,26 +71,48 @@ jobs:
           python -c "import gzip,pathlib; pathlib.Path('src/Localization.cs').write_bytes(gzip.decompress(pathlib.Path('localization520.gz').read_bytes()))"
           if ($LASTEXITCODE -ne 0) { throw 'Could not reconstruct Localization.cs' }
 
-      - name: Install final panel opacity and 3D branding files
+      - name: Apply verified 5.20 UI baseline
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $zipHash = (Get-FileHash '.build/final520-files.zip' -Algorithm SHA256).Hash.ToLower()
-          if ($zipHash -ne '424b77eb36b6951fbd67a4ab8e9aac803f9e2d330599def11148add40a1e90b0') { throw "Final files ZIP hash mismatch: $zipHash" }
-          Expand-Archive '.build/final520-files.zip' -DestinationPath final520 -Force
-          Copy-Item 'final520/*' 'src/' -Force
-          $expected = @{
-            'BrandVisual.cs'='337e84dd89c0fe6f3ba9f6f85555eda0a3c2aa47e82b29242b2ef9ee2ee0bb93';
-            'MainWindow.xaml'='e78b577594d90a2b9c24b61253880b2c4823f08d64c54ce13f8b46a1586153cd';
-            'MainWindow.xaml.cs'='1ee55409521058fa00db68fc9325455483cdfdb89daae34a326c370b1c23400f';
-            'MainWindow.Extras.cs'='5b7101a7552f96ebbcac51da32e43c9a28ccbdf18b47e49a1f5c03246f13c49f';
-            'Models.cs'='200351b0a7768e747e3206dc34b6015f0ab292a5b6e78aa0898c583374737b1b';
-            'Localization.cs'='a4a200eb91c2aa1c7d62cdcbdfdd71823721d5af8aee49c35d5f7ce27a3b5449'
-          }
-          foreach ($name in $expected.Keys) {
-            $hash = (Get-FileHash "src/$name" -Algorithm SHA256).Hash.ToLower()
-            if ($hash -ne $expected[$name]) { throw "$name hash mismatch: $hash" }
-          }
+          $parts = Get-ChildItem '.build/feature520.part*' | Sort-Object Name
+          if ($parts.Count -ne 6) { throw "Expected 6 feature chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 19512) { throw "Wrong feature base64 length: $($b64.Length)" }
+          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
+          if ($b64Hash -ne 'd48a64c9c3b8fab644dbbfd0648c790479bcedf0cb1dd048e352e54cb602bfb8') { throw "Feature chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('feature520.gz',[Convert]::FromBase64String($b64))
+          python -c "import gzip,pathlib; pathlib.Path('feature520.diff').write_bytes(gzip.decompress(pathlib.Path('feature520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress feature patch' }
+          $featureHash = (Get-FileHash 'feature520.diff' -Algorithm SHA256).Hash.ToLower()
+          if ($featureHash -ne 'e6a436351066f84a0b87d4e85cfa0f0f045b184b9c48606bd9620c4be63b5742') { throw "Feature patch hash mismatch: $featureHash" }
+          Push-Location src
+          git apply --whitespace=nowarn ..\feature520.diff
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply verified UI baseline' }
+          Pop-Location
+          $newLocHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
+          $validLocHashes = @('11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac','9384ced2c1821e733d78a8f341201ea26794657e00b896ff4dc77f99f8490b31')
+          if ($validLocHashes -notcontains $newLocHash) { throw "Updated Localization.cs hash mismatch: $newLocHash" }
+
+      - name: Apply final transparency and 3D branding polish
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem '.build/visual520.part*' | Sort-Object Name
+          if ($parts.Count -ne 4) { throw "Expected 4 visual chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 18072) { throw "Wrong visual base64 length: $($b64.Length)" }
+          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
+          if ($b64Hash -ne '4461d43a8ef782d0be932413079b1172aa5a0d9109cf50108cbb616d7a96d54f') { throw "Visual chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('visual520.gz',[Convert]::FromBase64String($b64))
+          python -c "import gzip,pathlib; pathlib.Path('visual520.diff').write_bytes(gzip.decompress(pathlib.Path('visual520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress visual patch' }
+          $visualHash = (Get-FileHash 'visual520.diff' -Algorithm SHA256).Hash.ToLower()
+          if ($visualHash -ne 'a28599233d6994ca40fd8f7fb637853d0bf5b2ec3e0fc72f13d1483dfe4f464e') { throw "Visual patch hash mismatch: $visualHash" }
+          Push-Location src
+          git apply --whitespace=nowarn ..\visual520.diff
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply final visual polish' }
+          Pop-Location
 
       - name: Static localization and feature checks
         shell: pwsh
