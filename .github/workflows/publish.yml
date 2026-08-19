@@ -1,4 +1,4 @@
-# cps-hotfix-trigger-2
+# publish-5.21
 name: Publish Clickers
 
 on:
@@ -47,17 +47,33 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
           python cps520-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+
           foreach ($marker in @('localizedFromEnglish','NormalizeCps','WaitUntil','nextClickTick','SendMouseClick','Maximum="5000"')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Hotfix marker missing: $marker" }
           }
           if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(settings.Cps, 0.1, 500)' -SimpleMatch) { throw 'Engine 500 CPS clamp still present' }
           if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(c.Cps, 0.1, 500)' -SimpleMatch) { throw 'Settings 500 CPS clamp still present' }
 
+      - name: Bump application to 5.21
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem src -Recurse -File | Where-Object { $_.Extension -in @('.cs','.xaml','.csproj') }
+          foreach ($file in $files) {
+            $text = Get-Content $file.FullName -Raw
+            if ($text.Contains('5.20')) {
+              $text = $text.Replace('5.20','5.21')
+              Set-Content -Path $file.FullName -Value $text -Encoding utf8
+            }
+          }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.21.0</Version>' -SimpleMatch)) { throw '5.21 project version missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern '5.21' -SimpleMatch)) { throw '5.21 UI version missing' }
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build Riu 5.20 hotfix
+      - name: Build Riu 5.21
         shell: pwsh
         run: |
           dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
@@ -66,10 +82,10 @@ jobs:
             -p:AssemblyName=RiuClicker `
             -p:ApplicationIcon=app.ico `
             -o out/riu
-          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.20 build failed' }
-          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.20.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.21 build failed' }
+          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.21.exe
 
-      - name: Build Strawberry 5.20 hotfix
+      - name: Build Strawberry 5.21
         shell: pwsh
         run: |
           dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
@@ -79,47 +95,60 @@ jobs:
             -p:AssemblyName=StrawberryClicker `
             -p:ApplicationIcon=strawberry.ico `
             -o out/strawberry
-          if ($LASTEXITCODE -ne 0) { throw 'Strawberry 5.20 build failed' }
-          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.20.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Strawberry 5.21 build failed' }
+          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.21.exe
 
-      - name: Package 5.20 hotfix
+      - name: Package 5.21
         shell: pwsh
         run: |
-          foreach ($f in @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe')) {
+          foreach ($f in @('out/RiuClicker-5.21.exe','out/StrawberryClicker-5.21.exe')) {
             if (-not (Test-Path $f)) { throw "$f missing" }
             if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
           }
-          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.20-Source.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.21-Source.zip -Force
           New-Item -ItemType Directory -Path package -Force | Out-Null
-          Copy-Item out/RiuClicker-5.20.exe package/
-          Copy-Item out/StrawberryClicker-5.20.exe package/
-          Copy-Item out/Riu-Strawberry-5.20-Source.zip package/
-          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.20.zip -Force
+          Copy-Item out/RiuClicker-5.21.exe package/
+          Copy-Item out/StrawberryClicker-5.21.exe package/
+          Copy-Item out/Riu-Strawberry-5.21-Source.zip package/
+          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.21.zip -Force
 
-      - name: Update public release 5.20
+      - name: Create public release 5.21
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            'Riu + Strawberry Clicker 5.20 hotfix.',
+            'Riu + Strawberry Clicker 5.21.',
             '',
             'Changes:',
-            '- Removed the old 500 CPS software cap from the engine, settings loader and CPS input.',
-            '- CPS slider now starts at 5000 and expands automatically when a higher CPS value is typed.',
-            '- New high-resolution absolute-deadline scheduler: 500 CPS targets a real 2 ms cadence without accumulating Task.Delay or SendInput drift.',
-            '- Mouse down/up are sent together in one SendInput batch for lower overhead.',
-            '- Mixed-language localization hotfix retained.',
-            '- 3D Riu / Strawberry branding, panel transparency, wallhop fixes and all previous 5.20 features retained.',
+            '- Removed the old 500 CPS software cap from the engine, saved settings and CPS input.',
+            '- CPS range expands automatically for values above the visible slider range.',
+            '- High-resolution absolute-deadline scheduler targets 500 CPS at a real 2 ms cadence.',
+            '- Mouse down/up are sent in one SendInput batch to reduce overhead.',
+            '- Fixed mixed-language interface translations.',
+            '- Retains 3D Riu / Strawberry branding, panel transparency, wallhop fixes, macros, profiles and all previous 5.20 features.',
             '',
-            'Note: extremely high CPS can still be limited by Windows, the target app, hardware, CPU load or the CPS tester itself; there is no longer an artificial 500 CPS cap in Riu Clicker.'
+            'Very high CPS may still be limited by Windows, CPU load, the target application or the CPS tester itself.'
           ) | Set-Content release-notes.md
-          $assets = @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe','out/Riu-and-Strawberry-5.20.zip','out/Riu-Strawberry-5.20-Source.zip')
-          gh release upload v5.20 $assets --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Could not replace 5.20 assets' }
-          gh release edit v5.20 --title 'Riu + Strawberry Clicker 5.20 · Localization + 3D + CPS Hotfix' --notes-file release-notes.md --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.20 release notes' }
+
+          $assets = @(
+            'out/RiuClicker-5.21.exe',
+            'out/StrawberryClicker-5.21.exe',
+            'out/Riu-and-Strawberry-5.21.zip',
+            'out/Riu-Strawberry-5.21-Source.zip'
+          )
+
+          gh release view v5.21 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload v5.21 $assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.21 assets' }
+            gh release edit v5.21 --title 'Riu + Strawberry Clicker 5.21 · CPS Precision' --notes-file release-notes.md --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.21 release' }
+          } else {
+            gh release create v5.21 $assets --title 'Riu + Strawberry Clicker 5.21 · CPS Precision' --notes-file release-notes.md --target main --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.21 release' }
+          }
 
       - name: Verify public release
         shell: pwsh
@@ -127,10 +156,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $release = gh release view v5.20 --json tagName,name,url,assets | ConvertFrom-Json
-          if ($release.tagName -ne 'v5.20') { throw 'Wrong release tag' }
+          $release = gh release view v5.21 --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'v5.21') { throw 'Wrong release tag' }
           $names = @($release.assets | ForEach-Object { $_.name })
-          foreach ($name in @('RiuClicker-5.20.exe','StrawberryClicker-5.20.exe','Riu-and-Strawberry-5.20.zip','Riu-Strawberry-5.20-Source.zip')) {
+          foreach ($name in @('RiuClicker-5.21.exe','StrawberryClicker-5.21.exe','Riu-and-Strawberry-5.21.zip','Riu-Strawberry-5.21-Source.zip')) {
             if ($name -notin $names) { throw "$name missing from public release" }
           }
           Write-Host "Verified public release: $($release.url)"
@@ -140,9 +169,15 @@ jobs:
         shell: pwsh
         run: |
           $status = '${{ job.status }}'
-          @("status=$status","run_id=${{ github.run_id }}","commit=${{ github.sha }}",'tag=v5.20','hotfix=cps-unlimited-precise') | Set-Content publish-5.20-status.txt
+          @(
+            "status=$status",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=v5.21',
+            'build=cps-unlimited-precise'
+          ) | Set-Content publish-5.21-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add publish-5.20-status.txt
-          git commit -m "Record 5.20 CPS hotfix publish status" 2>$null
+          git add publish-5.21-status.txt
+          git commit -m "Record 5.21 publish status" 2>$null
           if ($LASTEXITCODE -eq 0) { git push }
