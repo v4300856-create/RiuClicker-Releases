@@ -1,3 +1,4 @@
+# cps-hotfix-trigger-2
 name: Publish Clickers
 
 on:
@@ -42,12 +43,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           python .build/localization520-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
-
           gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
           python cps520-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
-
           foreach ($marker in @('localizedFromEnglish','NormalizeCps','WaitUntil','nextClickTick','SendMouseClick','Maximum="5000"')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Hotfix marker missing: $marker" }
           }
@@ -116,13 +115,7 @@ jobs:
             '',
             'Note: extremely high CPS can still be limited by Windows, the target app, hardware, CPU load or the CPS tester itself; there is no longer an artificial 500 CPS cap in Riu Clicker.'
           ) | Set-Content release-notes.md
-
-          $assets = @(
-            'out/RiuClicker-5.20.exe',
-            'out/StrawberryClicker-5.20.exe',
-            'out/Riu-and-Strawberry-5.20.zip',
-            'out/Riu-Strawberry-5.20-Source.zip'
-          )
+          $assets = @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe','out/Riu-and-Strawberry-5.20.zip','out/Riu-Strawberry-5.20-Source.zip')
           gh release upload v5.20 $assets --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Could not replace 5.20 assets' }
           gh release edit v5.20 --title 'Riu + Strawberry Clicker 5.20 · Localization + 3D + CPS Hotfix' --notes-file release-notes.md --latest
@@ -147,13 +140,7 @@ jobs:
         shell: pwsh
         run: |
           $status = '${{ job.status }}'
-          @(
-            "status=$status",
-            "run_id=${{ github.run_id }}",
-            "commit=${{ github.sha }}",
-            'tag=v5.20',
-            'hotfix=cps-unlimited-precise'
-          ) | Set-Content publish-5.20-status.txt
+          @("status=$status","run_id=${{ github.run_id }}","commit=${{ github.sha }}",'tag=v5.20','hotfix=cps-unlimited-precise') | Set-Content publish-5.20-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add publish-5.20-status.txt
