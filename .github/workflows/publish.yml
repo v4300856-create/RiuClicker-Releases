@@ -20,71 +20,113 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download verified 5.20 final artifact
+      - name: Download verified 5.20 source
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.20 final artifact' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.20 artifact' }
           Expand-Archive artifact.zip -DestinationPath artifact -Force
-
-          $riu = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-5.20.exe' | Select-Object -First 1
-          $strawberry = Get-ChildItem artifact -Recurse -Filter 'StrawberryClicker-5.20.exe' | Select-Object -First 1
-          $bundle = Get-ChildItem artifact -Recurse -Filter 'Riu-and-Strawberry-5.20.zip' | Select-Object -First 1
           $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
-
-          if (-not $riu) { throw 'RiuClicker-5.20.exe missing' }
-          if (-not $strawberry) { throw 'StrawberryClicker-5.20.exe missing' }
-          if (-not $bundle) { throw '5.20 bundle missing' }
           if (-not $source) { throw '5.20 source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
 
-          New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item $riu.FullName 'release/RiuClicker-5.20.exe'
-          Copy-Item $strawberry.FullName 'release/StrawberryClicker-5.20.exe'
-          Copy-Item $bundle.FullName 'release/Riu-and-Strawberry-5.20.zip'
-          Copy-Item $source.FullName 'release/Riu-Strawberry-5.20-Source.zip'
-
-      - name: Create or update public release 5.20
+      - name: Apply localization and CPS hotfixes
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $false
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+
+          foreach ($marker in @('localizedFromEnglish','NormalizeCps','WaitUntil','nextClickTick','SendMouseClick','Maximum="5000"')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Hotfix marker missing: $marker" }
+          }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(settings.Cps, 0.1, 500)' -SimpleMatch) { throw 'Engine 500 CPS clamp still present' }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(c.Cps, 0.1, 500)' -SimpleMatch) { throw 'Settings 500 CPS clamp still present' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Riu 5.20 hotfix
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/riu
+          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.20 build failed' }
+          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.20.exe
+
+      - name: Build Strawberry 5.20 hotfix
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DefineConstants=STRAWBERRY `
+            -p:AssemblyName=StrawberryClicker `
+            -p:ApplicationIcon=strawberry.ico `
+            -o out/strawberry
+          if ($LASTEXITCODE -ne 0) { throw 'Strawberry 5.20 build failed' }
+          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.20.exe
+
+      - name: Package 5.20 hotfix
+        shell: pwsh
+        run: |
+          foreach ($f in @('out/RiuClicker-5.20.exe','out/StrawberryClicker-5.20.exe')) {
+            if (-not (Test-Path $f)) { throw "$f missing" }
+            if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
+          }
+          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.20-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.20.exe package/
+          Copy-Item out/StrawberryClicker-5.20.exe package/
+          Copy-Item out/Riu-Strawberry-5.20-Source.zip package/
+          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.20.zip -Force
+
+      - name: Update public release 5.20
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
           @(
-            'Riu + Strawberry Clicker 5.20 — localization and visual polish.',
+            'Riu + Strawberry Clicker 5.20 hotfix.',
             '',
             'Changes:',
-            '- Full interface localization: Русский, English, Українська, 简体中文, Deutsch, Español, Français and Polski.',
-            '- Language switching covers navigation, controls, statuses, hints and system messages.',
-            '- New panel/card transparency control so the background image can stay visible.',
-            '- Riu Clicker now uses a rotating 3D Riu brand visual.',
-            '- StrawberryClicker now uses a rotating 3D strawberry with modeled body, seeds, leaves and stem.',
-            '- 3D branding respects animation and low-end performance settings.',
-            '- Nova Control usability, macro/profile tools, hotkey checks and emergency stop from 5.19 are retained.',
-            '- Wallhop stability improvements and queued fast retrigger behavior are retained.',
-            '- Both Windows x64 builds were compiled and verified in CI before publication.'
+            '- Removed the old 500 CPS software cap from the engine, settings loader and CPS input.',
+            '- CPS slider now starts at 5000 and expands automatically when a higher CPS value is typed.',
+            '- New high-resolution absolute-deadline scheduler: 500 CPS targets a real 2 ms cadence without accumulating Task.Delay or SendInput drift.',
+            '- Mouse down/up are sent together in one SendInput batch for lower overhead.',
+            '- Mixed-language localization hotfix retained.',
+            '- 3D Riu / Strawberry branding, panel transparency, wallhop fixes and all previous 5.20 features retained.',
+            '',
+            'Note: extremely high CPS can still be limited by Windows, the target app, hardware, CPU load or the CPS tester itself; there is no longer an artificial 500 CPS cap in Riu Clicker.'
           ) | Set-Content release-notes.md
 
           $assets = @(
-            'release/RiuClicker-5.20.exe',
-            'release/StrawberryClicker-5.20.exe',
-            'release/Riu-and-Strawberry-5.20.zip',
-            'release/Riu-Strawberry-5.20-Source.zip'
+            'out/RiuClicker-5.20.exe',
+            'out/StrawberryClicker-5.20.exe',
+            'out/Riu-and-Strawberry-5.20.zip',
+            'out/Riu-Strawberry-5.20-Source.zip'
           )
-
-          gh release view v5.20 --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload v5.20 $assets --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.20 assets' }
-            gh release edit v5.20 --title 'Riu + Strawberry Clicker 5.20 · 3D & Localization' --notes-file release-notes.md --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.20 release' }
-          } else {
-            gh release create v5.20 $assets --title 'Riu + Strawberry Clicker 5.20 · 3D & Localization' --notes-file release-notes.md --target main --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.20 release' }
-          }
+          gh release upload v5.20 $assets --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not replace 5.20 assets' }
+          gh release edit v5.20 --title 'Riu + Strawberry Clicker 5.20 · Localization + 3D + CPS Hotfix' --notes-file release-notes.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.20 release notes' }
 
       - name: Verify public release
         shell: pwsh
@@ -109,11 +151,11 @@ jobs:
             "status=$status",
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
-            'tag=v5.20'
+            'tag=v5.20',
+            'hotfix=cps-unlimited-precise'
           ) | Set-Content publish-5.20-status.txt
-
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add publish-5.20-status.txt
-          git commit -m "Record 5.20 publish status" 2>$null
+          git commit -m "Record 5.20 CPS hotfix publish status" 2>$null
           if ($LASTEXITCODE -eq 0) { git push }
