@@ -1,0 +1,8 @@
+from pathlib import Path
+p=Path('src/Localization.cs')
+s=p.read_text(encoding='utf-8')
+old='''    public static string T(string? source)\n    {\n        if (string.IsNullOrEmpty(source) || string.Equals(CurrentLanguage, "ru", StringComparison.OrdinalIgnoreCase)) return source ?? "";\n        var lang = Phrases.TryGetValue(CurrentLanguage, out var requested) ? requested : Phrases["en"];\n        if (lang.TryGetValue(source, out var exact)) return exact;\n        if (!ReferenceEquals(lang, Phrases["en"]) && Phrases["en"].TryGetValue(source, out var englishExact)) return englishExact;\n        return ReplaceKnown(source, lang);\n    }\n'''
+new='''    public static string T(string? source)\n    {\n        if (string.IsNullOrEmpty(source) || string.Equals(CurrentLanguage, "ru", StringComparison.OrdinalIgnoreCase)) return source ?? "";\n        var lang = Phrases.TryGetValue(CurrentLanguage, out var requested) ? requested : Phrases["en"];\n        if (lang.TryGetValue(source, out var exact)) return exact;\n        if (!ReferenceEquals(lang, Phrases["en"]))\n        {\n            foreach (var pair in Phrases["en"])\n            {\n                if (!string.Equals(pair.Value, source, StringComparison.Ordinal)) continue;\n                if (lang.TryGetValue(pair.Key, out var localizedFromEnglish)) return localizedFromEnglish;\n                return pair.Value;\n            }\n        }\n        if (!ReferenceEquals(lang, Phrases["en"]) && Phrases["en"].TryGetValue(source, out var englishExact)) return englishExact;\n        return ReplaceKnown(source, lang);\n    }\n'''
+if old not in s: raise SystemExit('Localization target not found')
+p.write_text(s.replace(old,new),encoding='utf-8')
+print('Applied localization hotfix')
