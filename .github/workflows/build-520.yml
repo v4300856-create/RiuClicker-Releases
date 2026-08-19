@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - '.build/patch520.gz.b64'
+      - '.build/patch520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -36,11 +36,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $b64 = Get-Content '.build/patch520.gz.b64' -Raw
-          [IO.File]::WriteAllBytes('patch520.gz',[Convert]::FromBase64String($b64.Trim()))
+          $parts = Get-ChildItem '.build/patch520.part*' | Sort-Object Name
+          if ($parts.Count -ne 5) { throw "Expected 5 patch chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 17092) { throw "Wrong patch base64 length: $($b64.Length)" }
+          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
+          if ($b64Hash -ne '8a0d5ec55ea9cbbfd34f304b56fb0127d27f2aef3e9d05c077e3236aa4b8a9ec') { throw "Patch chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('patch520.gz',[Convert]::FromBase64String($b64))
           python -c "import gzip,pathlib; pathlib.Path('patch520.diff').write_bytes(gzip.decompress(pathlib.Path('patch520.gz').read_bytes()))"
           if ($LASTEXITCODE -ne 0) { throw 'Could not decompress 5.20 patch' }
-          if ((Get-Item 'patch520.diff').Length -lt 50000) { throw '5.20 patch unexpectedly small' }
+          $patchHash = (Get-FileHash 'patch520.diff' -Algorithm SHA256).Hash.ToLower()
+          if ($patchHash -ne 'b18bfbb092473ffa54ccb927399692a5b745164f2d1c462f786c8a3016e81beb') { throw "Patch hash mismatch: $patchHash" }
 
           Push-Location src
           git init
