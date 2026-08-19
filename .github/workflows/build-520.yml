@@ -6,6 +6,7 @@ on:
     paths:
       - '.build/final520.part*'
       - '.build/localization520-hotfix.py'
+      - '.build/cps520-hotfix.py'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -70,6 +71,18 @@ jobs:
           python .build/localization520-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
           if (-not (Select-String -Path 'src/Localization.cs' -Pattern 'localizedFromEnglish' -SimpleMatch)) { throw 'Localization hotfix marker missing' }
+
+      - name: Remove CPS cap and install precise scheduler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+          foreach ($marker in @('NormalizeCps','WaitUntil','nextClickTick','SendMouseClick','Maximum="5000"')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "CPS marker missing: $marker" }
+          }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(settings.Cps, 0.1, 500)' -SimpleMatch) { throw 'Engine 500 CPS clamp still present' }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(c.Cps, 0.1, 500)' -SimpleMatch) { throw 'Settings 500 CPS clamp still present' }
 
       - name: Static localization and feature checks
         shell: pwsh
