@@ -4,9 +4,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - '.build/patch520.part*'
-      - '.build/localization520.part*'
-      - '.build/feature520.part*'
       - '.build/visual520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
@@ -21,78 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download verified 5.19 source
+      - name: Download verified green 5.20 source
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh api "/repos/${{ github.repository }}/actions/artifacts/9344133447/zip" > base-artifact.zip
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.19 artifact' }
-          Expand-Archive base-artifact.zip -DestinationPath base -Force
-          $source = Get-ChildItem base -Recurse -Filter 'Riu-Strawberry-5.19-Source.zip' | Select-Object -First 1
-          if (-not $source) { throw '5.19 source zip missing' }
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9357708831/zip" > base520-artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified green 5.20 artifact' }
+          Expand-Archive base520-artifact.zip -DestinationPath base520 -Force
+          $source = Get-ChildItem base520 -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Verified 5.20 source zip missing' }
           Expand-Archive $source.FullName -DestinationPath src -Force
-          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.19 source extraction failed' }
-
-      - name: Reconstruct and apply 5.20 localization
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem '.build/patch520.part*' | Sort-Object Name
-          if ($parts.Count -ne 5) { throw "Expected 5 patch chunks, found $($parts.Count)" }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 17092) { throw "Wrong patch base64 length: $($b64.Length)" }
-          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne '8a0d5ec55ea9cbbfd34f304b56fb0127d27f2aef3e9d05c077e3236aa4b8a9ec') { throw "Patch chunk hash mismatch: $b64Hash" }
-          [IO.File]::WriteAllBytes('patch520.gz',[Convert]::FromBase64String($b64))
-          python -c "import gzip,pathlib; pathlib.Path('patch520.diff').write_bytes(gzip.decompress(pathlib.Path('patch520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress 5.20 patch' }
-          $patchHash = (Get-FileHash 'patch520.diff' -Algorithm SHA256).Hash.ToLower()
-          if ($patchHash -ne 'b18bfbb092473ffa54ccb927399692a5b745164f2d1c462f786c8a3016e81beb') { throw "Patch hash mismatch: $patchHash" }
-          Push-Location src
-          git init
-          git config user.name 'ci'
-          git config user.email 'ci@example.invalid'
-          git add .
-          git commit -m 'verified 5.19 source'
-          git apply --whitespace=nowarn ..\patch520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 5.20 localization patch' }
-          Pop-Location
-
-          $lparts = Get-ChildItem '.build/localization520.part*' | Sort-Object Name
-          if ($lparts.Count -ne 4) { throw "Expected 4 localization chunks, found $($lparts.Count)" }
-          $lb64 = ($lparts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($lb64.Length -eq 13695) { $lb64 = $lb64.Insert(8218, 'm') }
-          if ($lb64.Length -ne 13696) { throw "Wrong localization base64 length: $($lb64.Length)" }
-          $lb64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($lb64)))).Replace('-','').ToLower()
-          if ($lb64Hash -ne '0d97b4e88e35e69afbc5819de1c30fac35d3786e2df2ddf6acd1a2cbd74004ee') { throw "Localization chunk hash mismatch: $lb64Hash" }
-          [IO.File]::WriteAllBytes('localization520.gz',[Convert]::FromBase64String($lb64))
-          python -c "import gzip,pathlib; pathlib.Path('src/Localization.cs').write_bytes(gzip.decompress(pathlib.Path('localization520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not reconstruct Localization.cs' }
-
-      - name: Apply verified 5.20 UI baseline
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $parts = Get-ChildItem '.build/feature520.part*' | Sort-Object Name
-          if ($parts.Count -ne 6) { throw "Expected 6 feature chunks, found $($parts.Count)" }
-          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          if ($b64.Length -ne 19512) { throw "Wrong feature base64 length: $($b64.Length)" }
-          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
-          if ($b64Hash -ne 'd48a64c9c3b8fab644dbbfd0648c790479bcedf0cb1dd048e352e54cb602bfb8') { throw "Feature chunk hash mismatch: $b64Hash" }
-          [IO.File]::WriteAllBytes('feature520.gz',[Convert]::FromBase64String($b64))
-          python -c "import gzip,pathlib; pathlib.Path('feature520.diff').write_bytes(gzip.decompress(pathlib.Path('feature520.gz').read_bytes()))"
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress feature patch' }
-          $featureHash = (Get-FileHash 'feature520.diff' -Algorithm SHA256).Hash.ToLower()
-          if ($featureHash -ne 'e6a436351066f84a0b87d4e85cfa0f0f045b184b9c48606bd9620c4be63b5742') { throw "Feature patch hash mismatch: $featureHash" }
-          Push-Location src
-          git apply --whitespace=nowarn ..\feature520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply verified UI baseline' }
-          Pop-Location
-          $newLocHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
-          $validLocHashes = @('11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac','9384ced2c1821e733d78a8f341201ea26794657e00b896ff4dc77f99f8490b31')
-          if ($validLocHashes -notcontains $newLocHash) { throw "Updated Localization.cs hash mismatch: $newLocHash" }
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw '5.20 source extraction failed' }
 
       - name: Apply final transparency and 3D branding polish
         shell: pwsh
@@ -110,8 +48,13 @@ jobs:
           $visualHash = (Get-FileHash 'visual520.diff' -Algorithm SHA256).Hash.ToLower()
           if ($visualHash -ne 'a28599233d6994ca40fd8f7fb637853d0bf5b2ec3e0fc72f13d1483dfe4f464e') { throw "Visual patch hash mismatch: $visualHash" }
           Push-Location src
+          git init
+          git config user.name 'ci'
+          git config user.email 'ci@example.invalid'
+          git add .
+          git commit -m 'verified green 5.20 source'
           git apply --whitespace=nowarn ..\visual520.diff
-          if ($LASTEXITCODE -ne 0) { throw 'Could not apply final visual polish' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply final visual polish to verified 5.20 source' }
           Pop-Location
 
       - name: Static localization and feature checks
