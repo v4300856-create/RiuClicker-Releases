@@ -37,14 +37,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $b64 = Get-Content '.build/patch520.gz.b64' -Raw
-          $compressed = [Convert]::FromBase64String($b64.Trim())
-          $in = New-Object IO.MemoryStream(,$compressed)
-          $gzip = New-Object IO.Compression.GZipStream($in,[IO.Compression.CompressionMode]::Decompress)
-          $out = New-Object IO.MemoryStream
-          $gzip.CopyTo($out)
-          $gzip.Dispose(); $in.Dispose()
-          [IO.File]::WriteAllBytes('patch520.diff',$out.ToArray())
-          $out.Dispose()
+          [byte[]]$compressed = [Convert]::FromBase64String($b64.Trim())
+          $inputStream = [System.IO.MemoryStream]::new($compressed)
+          $gzip = [System.IO.Compression.GZipStream]::new($inputStream,[System.IO.Compression.CompressionMode]::Decompress)
+          $outputStream = [System.IO.MemoryStream]::new()
+          $gzip.CopyTo($outputStream)
+          $gzip.Dispose(); $inputStream.Dispose()
+          [System.IO.File]::WriteAllBytes('patch520.diff',$outputStream.ToArray())
+          $outputStream.Dispose()
 
           Push-Location src
           git init
@@ -53,6 +53,7 @@ jobs:
           git add .
           git commit -m 'verified 5.19 source'
           git apply --whitespace=nowarn ..\patch520.diff
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 5.20 patch' }
           Pop-Location
 
           if (-not (Test-Path 'src/Localization.cs')) { throw 'Localization.cs missing after patch' }
