@@ -6,6 +6,7 @@ on:
     paths:
       - '.build/patch520.part*'
       - '.build/localization520.part*'
+      - '.build/feature520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -76,7 +77,29 @@ jobs:
           $locHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
           if ($locHash -ne '1aca57eadadd0fcc24ca45276fb52283a806f8d1c68d429493202cdd646cd59e') { throw "Localization.cs hash mismatch: $locHash" }
 
-      - name: Static localization checks
+      - name: Apply 3D branding and transparency patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem '.build/feature520.part*' | Sort-Object Name
+          if ($parts.Count -ne 6) { throw "Expected 6 feature chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 19512) { throw "Wrong feature base64 length: $($b64.Length)" }
+          $b64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($b64)))).Replace('-','').ToLower()
+          if ($b64Hash -ne 'd48a64c9c3b8fab644dbbfd0648c790479bcedf0cb1dd048e352e54cb602bfb8') { throw "Feature chunk hash mismatch: $b64Hash" }
+          [IO.File]::WriteAllBytes('feature520.gz',[Convert]::FromBase64String($b64))
+          python -c "import gzip,pathlib; pathlib.Path('feature520.diff').write_bytes(gzip.decompress(pathlib.Path('feature520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress feature patch' }
+          $featureHash = (Get-FileHash 'feature520.diff' -Algorithm SHA256).Hash.ToLower()
+          if ($featureHash -ne 'e6a436351066f84a0b87d4e85cfa0f0f045b184b9c48606bd9620c4be63b5742') { throw "Feature patch hash mismatch: $featureHash" }
+          Push-Location src
+          git apply --whitespace=nowarn ..\feature520.diff
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply 3D/transparency feature patch' }
+          Pop-Location
+          $newLocHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
+          if ($newLocHash -ne '11219099cac61681997fefdbe6862b3a18227ecb91ebb330df409d048d8227ac') { throw "Updated Localization.cs hash mismatch: $newLocHash" }
+
+      - name: Static localization and feature checks
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -84,8 +107,8 @@ jobs:
           foreach ($tag in @('Tag="ru"','Tag="en"','Tag="uk"','Tag="zh-CN"','Tag="de"','Tag="es"','Tag="fr"','Tag="pl"')) {
             if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern $tag -SimpleMatch)) { throw "Language option missing: $tag" }
           }
-          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T')) {
-            if (-not (Get-ChildItem src -Filter '*.cs' -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Localization marker missing: $marker" }
+          foreach ($marker in @('Українська','简体中文','ApplyStaticLocalization','Localization.T','PanelTransparencySlider','BrandVisualHost','CreateRiuBrandModel','CreateStrawberryBrandModel','Viewport3D','Прозрачность панелей')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Feature marker missing: $marker" }
           }
 
       - uses: actions/setup-dotnet@v4
