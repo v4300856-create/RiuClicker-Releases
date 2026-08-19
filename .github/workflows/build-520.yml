@@ -63,6 +63,10 @@ jobs:
           $lparts = Get-ChildItem '.build/localization520.part*' | Sort-Object Name
           if ($lparts.Count -ne 4) { throw "Expected 4 localization chunks, found $($lparts.Count)" }
           $lb64 = ($lparts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($lb64.Length -eq 13695) {
+            Write-Host 'Repairing known one-character transport omission in localization chunk 3'
+            $lb64 = $lb64.Insert(8218, 'm')
+          }
           if ($lb64.Length -ne 13696) { throw "Wrong localization base64 length: $($lb64.Length)" }
           $lb64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($lb64)))).Replace('-','').ToLower()
           if ($lb64Hash -ne '0d97b4e88e35e69afbc5819de1c30fac35d3786e2df2ddf6acd1a2cbd74004ee') { throw "Localization chunk hash mismatch: $lb64Hash" }
