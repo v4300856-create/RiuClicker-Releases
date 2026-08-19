@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.build/patch520.part*'
+      - '.build/localization520.part*'
       - '.github/workflows/build-520.yml'
   workflow_dispatch:
 
@@ -36,6 +37,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+
           $parts = Get-ChildItem '.build/patch520.part*' | Sort-Object Name
           if ($parts.Count -ne 5) { throw "Expected 5 patch chunks, found $($parts.Count)" }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
@@ -58,7 +60,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Could not apply 5.20 patch' }
           Pop-Location
 
-          if (-not (Test-Path 'src/Localization.cs')) { throw 'Localization.cs missing after patch' }
+          $lparts = Get-ChildItem '.build/localization520.part*' | Sort-Object Name
+          if ($lparts.Count -ne 4) { throw "Expected 4 localization chunks, found $($lparts.Count)" }
+          $lb64 = ($lparts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($lb64.Length -ne 13696) { throw "Wrong localization base64 length: $($lb64.Length)" }
+          $lb64Hash = ([BitConverter]::ToString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($lb64)))).Replace('-','').ToLower()
+          if ($lb64Hash -ne '0d97b4e88e35e69afbc5819de1c30fac35d3786e2df2ddf6acd1a2cbd74004ee') { throw "Localization chunk hash mismatch: $lb64Hash" }
+          [IO.File]::WriteAllBytes('localization520.gz',[Convert]::FromBase64String($lb64))
+          python -c "import gzip,pathlib; pathlib.Path('src/Localization.cs').write_bytes(gzip.decompress(pathlib.Path('localization520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not reconstruct Localization.cs' }
+          $locHash = (Get-FileHash 'src/Localization.cs' -Algorithm SHA256).Hash.ToLower()
+          if ($locHash -ne '1aca57eadadd0fcc24ca45276fb52283a806f8d1c68d429493202cdd646cd59e') { throw "Localization.cs hash mismatch: $locHash" }
 
       - name: Static localization checks
         shell: pwsh
