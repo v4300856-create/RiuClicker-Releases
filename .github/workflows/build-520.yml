@@ -37,14 +37,10 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $b64 = Get-Content '.build/patch520.gz.b64' -Raw
-          [byte[]]$compressed = [Convert]::FromBase64String($b64.Trim())
-          $inputStream = [System.IO.MemoryStream]::new($compressed)
-          $gzip = [System.IO.Compression.GZipStream]::new($inputStream,[System.IO.Compression.CompressionMode]::Decompress)
-          $outputStream = [System.IO.MemoryStream]::new()
-          $gzip.CopyTo($outputStream)
-          $gzip.Dispose(); $inputStream.Dispose()
-          [System.IO.File]::WriteAllBytes('patch520.diff',$outputStream.ToArray())
-          $outputStream.Dispose()
+          [IO.File]::WriteAllBytes('patch520.gz',[Convert]::FromBase64String($b64.Trim()))
+          python -c "import gzip,pathlib; pathlib.Path('patch520.diff').write_bytes(gzip.decompress(pathlib.Path('patch520.gz').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decompress 5.20 patch' }
+          if ((Get-Item 'patch520.diff').Length -lt 50000) { throw '5.20 patch unexpectedly small' }
 
           Push-Location src
           git init
