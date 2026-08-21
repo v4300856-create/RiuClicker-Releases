@@ -1,0 +1,53 @@
+name: Rebuild ASTER Lua
+
+on:
+  push:
+    branches:
+      - add-aster-loader
+    paths:
+      - 'aster_gzip/**'
+      - '.github/workflows/rebuild-aster.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: add-aster-loader
+
+      - name: Rebuild exact aster.lua
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, pathlib
+
+          root = pathlib.Path('aster_gzip')
+          parts = [root / f'chunk{i:02d}.txt' for i in range(1, 7)]
+          b64 = ''.join(p.read_text(encoding='utf-8').strip() for p in parts)
+          raw = gzip.decompress(base64.b64decode(b64))
+
+          expected = '1042650de91f36553dc3a3b81e13a4e7913db7799f64793ba0578114d3a336c1'
+          actual = hashlib.sha256(raw).hexdigest()
+          if actual != expected:
+              raise SystemExit(f'SHA256 mismatch: {actual}')
+
+          pathlib.Path('aster.lua').write_bytes(raw)
+          print(f'OK: {len(raw)} bytes, sha256={actual}')
+          PY
+
+      - name: Commit rebuilt file
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- aster.lua
+          if git diff --cached --quiet; then
+            echo 'aster.lua already up to date'
+            exit 0
+          fi
+          git commit -m 'Rebuild exact ASTER Lua payload'
+          git push origin HEAD:add-aster-loader
