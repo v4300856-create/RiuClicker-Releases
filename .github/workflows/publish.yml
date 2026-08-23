@@ -1,5 +1,4 @@
-# publish-5.22-trigger-2
-name: Publish Riu Clicker
+name: Remove All Autoclicker Releases
 
 on:
   push:
@@ -9,140 +8,47 @@ on:
 
 permissions:
   contents: write
-  actions: read
-
-concurrency:
-  group: publish-riu-clicker
-  cancel-in-progress: true
 
 jobs:
-  publish:
-    runs-on: windows-latest
+  cleanup:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download verified 5.20 source
-        shell: pwsh
+      - name: Delete all GitHub Releases and release tags
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.20 artifact' }
-          Expand-Archive artifact.zip -DestinationPath artifact -Force
-          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
-          if (-not $source) { throw '5.20 source bundle missing' }
-          Expand-Archive $source.FullName -DestinationPath src -Force
-          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+          set -euo pipefail
+          mapfile -t tags < <(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+          echo "Found ${#tags[@]} releases"
+          for tag in "${tags[@]}"; do
+            echo "Deleting release $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
 
-      - name: Apply 5.21 core fixes
-        shell: pwsh
+      - name: Verify no releases remain
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          python .build/localization520-hotfix.py
-          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
-          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
-          if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
-          python cps520-hotfix.py
-          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+          set -euo pipefail
+          count=$(gh release list --limit 1000 --json tagName --jq 'length')
+          if [ "$count" != "0" ]; then
+            echo "Releases still remain: $count"
+            gh release list --limit 1000
+            exit 1
+          fi
+          echo "All releases removed"
 
-      - name: Apply Riu 5.22 UI and video update
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          python .build/ui522-hotfix.py
-          if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
-          foreach ($marker in @('5.22','BackgroundVideo','MediaElement','Фото и видео','UninstallRiu_Click','localizedFromEnglish','NormalizeCps','WaitUntil','Maximum="5000"')) {
-            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "5.22 marker missing: $marker" }
-          }
-          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.22.0</Version>' -SimpleMatch)) { throw '5.22 project version missing' }
-          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(settings.Cps, 0.1, 500)' -SimpleMatch) { throw 'Engine 500 CPS clamp still present' }
-          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'Math.Clamp(c.Cps, 0.1, 500)' -SimpleMatch) { throw 'Settings 500 CPS clamp still present' }
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Build Riu Clicker 5.22
-        shell: pwsh
-        run: |
-          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:AssemblyName=RiuClicker `
-            -p:ApplicationIcon=app.ico `
-            -o out/riu
-          if ($LASTEXITCODE -ne 0) { throw 'Riu 5.22 build failed' }
-          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.22.exe
-
-      - name: Package Riu 5.22
-        shell: pwsh
-        run: |
-          if (-not (Test-Path 'out/RiuClicker-5.22.exe')) { throw 'RiuClicker-5.22.exe missing' }
-          if ((Get-Item 'out/RiuClicker-5.22.exe').Length -lt 10000000) { throw 'RiuClicker-5.22.exe unexpectedly small' }
-          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-5.22-Source.zip -Force
-          New-Item -ItemType Directory -Path package -Force | Out-Null
-          Copy-Item out/RiuClicker-5.22.exe package/
-          Copy-Item out/RiuClicker-5.22-Source.zip package/
-          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-5.22.zip -Force
-
-      - name: Create public release 5.22
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          @(
-            'Riu Clicker 5.22 · Motion Background update.',
-            '',
-            'Changes:',
-            '- StrawberryClicker is discontinued and is no longer built or included in this release.',
-            '- Background picker now supports photos and videos: PNG/JPG/JPEG/BMP/WEBP plus MP4/M4V/MOV/AVI/WMV.',
-            '- Video backgrounds loop automatically and render behind the transparent UI panels.',
-            '- Updated background/settings interface for photo + video media.',
-            '- Added a visible uninstall action. It lists matching Riu/old Strawberry files first and deletes them only after explicit confirmation, including the running Riu version after exit.',
-            '- Retains the 5.21 CPS precision update with no old 500 CPS software cap.',
-            '- Retains translation fixes, 3D Riu branding, panel transparency, wallhop fixes, macros and profiles.',
-            '',
-            'Video playback depends on codecs available in Windows. MP4 H.264 is recommended.'
-          ) | Set-Content release-notes.md
-          $assets = @('out/RiuClicker-5.22.exe','out/RiuClicker-5.22.zip','out/RiuClicker-5.22-Source.zip')
-          gh release view v5.22 --json tagName *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload v5.22 $assets --clobber
-            if ($LASTEXITCODE -ne 0) { throw 'Could not upload 5.22 assets' }
-            gh release edit v5.22 --title 'Riu Clicker 5.22 · Motion Background' --notes-file release-notes.md --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not update 5.22 release' }
-          } else {
-            gh release create v5.22 $assets --title 'Riu Clicker 5.22 · Motion Background' --notes-file release-notes.md --target main --latest
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create 5.22 release' }
-          }
-
-      - name: Verify public release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $release = gh release view v5.22 --json tagName,name,url,assets | ConvertFrom-Json
-          if ($release.tagName -ne 'v5.22') { throw 'Wrong release tag' }
-          $names = @($release.assets | ForEach-Object { $_.name })
-          foreach ($name in @('RiuClicker-5.22.exe','RiuClicker-5.22.zip','RiuClicker-5.22-Source.zip')) {
-            if ($name -notin $names) { throw "$name missing from public release" }
-          }
-          if ($names -match 'Strawberry') { throw 'Strawberry asset must not be present in 5.22' }
-          Write-Host "Verified public release: $($release.url)"
-
-      - name: Report publish status
+      - name: Record cleanup status
         if: always()
-        shell: pwsh
+        shell: bash
         run: |
-          $status = '${{ job.status }}'
-          @("status=$status","run_id=${{ github.run_id }}","commit=${{ github.sha }}",'tag=v5.22','build=riu-only-video-background') | Set-Content publish-5.22-status.txt
+          printf 'status=%s\nrun_id=%s\naction=remove-all-autoclicker-releases\n' "${{ job.status }}" "${{ github.run_id }}" > release-cleanup-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add publish-5.22-status.txt
-          git commit -m "Record 5.22 publish status" 2>$null
-          if ($LASTEXITCODE -eq 0) { git push }
+          git add release-cleanup-status.txt
+          git commit -m 'Record release cleanup status' || true
+          git push || true
