@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.build/pro-riuclicker.py.gz.b64'
       - '.build/pro-build-trigger.txt'
   workflow_dispatch:
 
@@ -51,24 +50,38 @@ jobs:
           python .build/ui522-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
 
-      - name: Decode and apply Pro feature patch
+      - name: Apply verified Pro feature patch
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/pro-riuclicker.py.gz.b64?ref=42814a2b32cb4cf143a562f8309358a35448e8f2" > verified-pro-patch.b64
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified Pro patch' }
           @'
           import base64, gzip, hashlib, pathlib
-          encoded = pathlib.Path('.build/pro-riuclicker.py.gz.b64').read_text(encoding='utf-8').strip()
+          encoded = pathlib.Path('verified-pro-patch.b64').read_text(encoding='utf-8').strip()
           raw = gzip.decompress(base64.b64decode(encoded))
-          expected = 'b0e5fa05132e8b4e836b3e918fab69cc6845294d5f64a6bdfeda3d755a23fc70'
+          expected = 'f74a5f7417c929dbb91aab5071564f1541fe400dd833d0a3119deadd662fae86'
           actual = hashlib.sha256(raw).hexdigest()
           if actual != expected:
               raise SystemExit(f'Pro patch SHA mismatch: {actual}')
           pathlib.Path('.build/pro-riuclicker.py').write_bytes(raw)
           '@ | Set-Content decode_pro.py -Encoding utf8
           python decode_pro.py
-          if ($LASTEXITCODE -ne 0) { throw 'Could not decode Pro patch' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decode verified Pro patch' }
           python .build/pro-riuclicker.py
           if ($LASTEXITCODE -ne 0) { throw 'Pro feature patch failed' }
+
+          $pro = Get-Content 'src/ProFeatures.cs' -Raw
+          if (-not $pro.Contains('using System.IO;')) {
+            $pro = $pro.Replace("using System.Collections.Concurrent;`r`n", "using System.Collections.Concurrent;`r`nusing System.IO;`r`n")
+            if (-not $pro.Contains('using System.IO;')) {
+              $pro = $pro.Replace("using System.Collections.Concurrent;`n", "using System.Collections.Concurrent;`nusing System.IO;`n")
+            }
+            Set-Content -Path 'src/ProFeatures.cs' -Value $pro -Encoding utf8
+          }
+          if (-not (Select-String -Path 'src/ProFeatures.cs' -Pattern 'using System.IO;' -SimpleMatch)) { throw 'System.IO compile fix missing' }
 
       - name: Validate Pro feature set
         shell: pwsh
