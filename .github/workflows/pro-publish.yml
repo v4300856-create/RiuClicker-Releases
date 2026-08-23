@@ -1,0 +1,170 @@
+name: Publish RiuClicker Pro Beta
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/pro-publish-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-pro
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified 5.20 source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Apply current Riu fixes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization patch failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch precise CPS patch' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS patch failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 photo/video UI patch failed' }
+
+      - name: Apply RiuClicker Pro features
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/pro-riuclicker.py
+          if ($LASTEXITCODE -ne 0) { throw 'Pro patch failed' }
+
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'BOLT ACTIONS · PRO' -SimpleMatch)) { throw 'Bolt Actions UI missing' }
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'SQUAD SYNC' -SimpleMatch)) { throw 'Squad UI missing' }
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'Tag="boltpush|instant"' -SimpleMatch)) { throw 'Bolt Push Instant missing' }
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'Tag="bolts|turbo"' -SimpleMatch)) { throw 'Bolts Turbo missing' }
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'Content="↗   Wallhop"' -SimpleMatch)) { throw 'Wallhop must remain in Pro' }
+          if (-not (Select-String 'src/MainWindow.Pro.cs' -Pattern 'Math.Max(8, t.FinalSafety)' -SimpleMatch)) { throw 'Instant Shift safety missing' }
+          if (-not (Select-String 'src/SquadSyncService.cs' -Pattern 'command is not ("E" or "V")' -SimpleMatch)) { throw 'Squad E/V command restriction missing' }
+          if (-not (Select-String 'src/Models.cs' -Pattern 'SettingsFolder = "RiuClickerPro"' -SimpleMatch)) { throw 'Pro settings isolation missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker Pro
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClickerPro `
+            -p:ApplicationIcon=app.ico `
+            -o out/pro
+          if ($LASTEXITCODE -ne 0) { throw 'RiuClicker Pro build failed' }
+          Copy-Item out/pro/RiuClickerPro.exe out/RiuClicker-Pro-1.0-Beta.exe
+          if ((Get-Item 'out/RiuClicker-Pro-1.0-Beta.exe').Length -lt 10000000) { throw 'Pro exe unexpectedly small' }
+
+      - name: Package Pro build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-Pro-1.0-Beta.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-1.0-Beta.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-Pro-1.0-Beta-Source.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-1.0-Beta
+          path: |
+            out/RiuClicker-Pro-1.0-Beta.exe
+            out/RiuClicker-Pro-1.0-Beta.zip
+            out/RiuClicker-Pro-1.0-Beta-Source.zip
+          retention-days: 30
+
+      - name: Publish separate Pro beta release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker Pro 1.0 Beta',
+            '',
+            'Separate Pro build. Free RiuClicker is unchanged.',
+            '',
+            'Pro features:',
+            '- Bolt Push: Right Click → Shift → V V V → Shift → coordinate click',
+            '- Bolts: V V V',
+            '- Stable / Fast / Turbo / Instant per action',
+            '- Instant Shift-release safety before the coordinate click',
+            '- Bolt Push and Bolts are mutually exclusive',
+            '- Wallhop restored',
+            '- Squad Sync: Owner PC hosts the lobby',
+            '- Owner physical E/V broadcasts only E/V to connected members',
+            '- Members run their own locally assigned action',
+            '- Photo/video backgrounds and precise CPS retained',
+            '',
+            'Squad Sync uses UPnP on the Owner router. Some routers/CGNAT networks can block direct hosting.'
+          ) | Set-Content pro-release-notes.md
+
+          $assets = @('out/RiuClicker-Pro-1.0-Beta.exe','out/RiuClicker-Pro-1.0-Beta.zip','out/RiuClicker-Pro-1.0-Beta-Source.zip')
+          gh release view pro-v1.0-beta --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload pro-v1.0-beta $assets --clobber
+            gh release edit pro-v1.0-beta --title 'RiuClicker Pro 1.0 Beta' --notes-file pro-release-notes.md --prerelease
+          } else {
+            gh release create pro-v1.0-beta $assets --title 'RiuClicker Pro 1.0 Beta' --notes-file pro-release-notes.md --target main --prerelease
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Pro beta release' }
+
+      - name: Verify Pro release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view pro-v1.0-beta --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'pro-v1.0-beta') { throw 'Wrong Pro release tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('RiuClicker-Pro-1.0-Beta.exe','RiuClicker-Pro-1.0-Beta.zip','RiuClicker-Pro-1.0-Beta-Source.zip')) {
+            if ($name -notin $names) { throw "$name missing from Pro release" }
+          }
+          Write-Host "Verified Pro release: $($release.url)"
+
+      - name: Record Pro publish status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=pro-v1.0-beta',
+            'build=bolt-actions-wallhop-squad-owner-hosted'
+          ) | Set-Content publish-pro-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add publish-pro-status.txt
+          git commit -m 'Record RiuClicker Pro publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
