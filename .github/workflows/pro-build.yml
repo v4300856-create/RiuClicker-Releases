@@ -1,0 +1,157 @@
+name: Build RiuClicker Pro
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/pro-riuclicker.py.gz.b64'
+      - '.build/pro-build-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: build-riuclicker-pro
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Apply latest 5.22 core fixes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
+
+      - name: Decode and apply Pro feature patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import base64, gzip, hashlib, pathlib
+          encoded = pathlib.Path('.build/pro-riuclicker.py.gz.b64').read_text(encoding='utf-8').strip()
+          raw = gzip.decompress(base64.b64decode(encoded))
+          expected = 'f74a5f7417c929dbb91aab5071564f1541fe400dd833d0a3119deadd662fae86'
+          actual = hashlib.sha256(raw).hexdigest()
+          if actual != expected:
+              raise SystemExit(f'Pro patch SHA mismatch: {actual}')
+          pathlib.Path('.build/pro-riuclicker.py').write_bytes(raw)
+          '@ | Set-Content decode_pro.py -Encoding utf8
+          python decode_pro.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not decode Pro patch' }
+          python .build/pro-riuclicker.py
+          if ($LASTEXITCODE -ne 0) { throw 'Pro feature patch failed' }
+
+      - name: Validate Pro feature set
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($marker in @(
+            'RiuClicker Pro',
+            'GameActionSettings',
+            'BoltPush',
+            'RunBoltPushAsync',
+            'RunBoltsAsync',
+            'PageLobby',
+            'BroadcastKeyAsync',
+            'KEY:E',
+            'KEY:V',
+            'PageWallhop'
+          )) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) {
+              throw "Missing Pro marker: $marker"
+            }
+          }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.0</Version>' -SimpleMatch)) { throw 'Pro version missing' }
+          if (Select-String -Path 'src/MainWindow.Extras.cs' -Pattern '_macros.TryStart(macro, _settings)' -SimpleMatch) { throw 'Editable macro hotkey runtime still active' }
+          if (-not (Select-String -Path 'src/ProFeatures.cs' -Pattern 'key is not ("E" or "V")' -SimpleMatch)) { throw 'Lobby E/V restriction missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker Pro
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClickerPro `
+            -p:ApplicationIcon=app.ico `
+            -o out/pro
+          if ($LASTEXITCODE -ne 0) { throw 'RiuClicker Pro build failed' }
+          Copy-Item out/pro/RiuClickerPro.exe out/RiuClicker-Pro-1.0.exe
+          if ((Get-Item 'out/RiuClicker-Pro-1.0.exe').Length -lt 10000000) { throw 'Pro exe unexpectedly small' }
+
+      - name: Package private test build
+        shell: pwsh
+        run: |
+          @(
+            'RiuClicker Pro 1.0 test build',
+            '',
+            'Features:',
+            '- Bolt Push: Right Click -> Shift -> V V V -> Shift -> coordinate click',
+            '- Bolts: V V V',
+            '- Mutual exclusion between Bolt Push and Bolts',
+            '- Coordinate validation and per-action hotkeys',
+            '- Wallhop restored',
+            '- Direct-IP Lobby; host can broadcast only E or V',
+            '- Updated Pro Command Center interface',
+            '',
+            'This is a test artifact, not a public paid release.'
+          ) | Set-Content out/README-Pro.txt
+
+      - name: Upload Pro test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-1.0-Test
+          path: |
+            out/RiuClicker-Pro-1.0.exe
+            out/README-Pro.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record Pro build status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'build=RiuClicker-Pro-1.0-Test',
+            'public_release=no'
+          ) | Set-Content pro-build-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pro-build-status.txt
+          git commit -m 'Record RiuClicker Pro build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
