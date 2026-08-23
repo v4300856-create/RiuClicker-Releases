@@ -1,5 +1,5 @@
 status=success
-run_id=32644243124
-commit=e0d9bd767d2f9e6a2bb2eceea338c6df4e392d59
+run_id=32644461135
+commit=3372344d80376f40c964856c0c489f3ce9dec48f
 tag=free-v1.0
-build=free-english-no-wallhop-no-turbo-instant
+publisher=dedicated
