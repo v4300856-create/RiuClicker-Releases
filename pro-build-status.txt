@@ -1,5 +1,6 @@
 status=success
-run_id=32649045374
-commit=011971ca30c9a7279ce7f73ba624e724f95fb89c
+run_id=32649534872
+commit=2c5e152ef57d7fad5d30cd9fac8664303331341b
 build=RiuClicker-Pro-1.0-Test
 public_release=no
+source_export=yes
