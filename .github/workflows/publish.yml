@@ -1,55 +1,166 @@
-# cleanup-trigger-2
-name: Remove All Autoclicker Releases
+# free-riuclicker-1.0
+name: Publish Free RiuClicker
 
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish.yml']
+    paths:
+      - '.github/workflows/publish.yml'
+      - '.build/free-riuclicker.py'
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: read
+
+concurrency:
+  group: publish-free-riuclicker
+  cancel-in-progress: true
 
 jobs:
-  cleanup:
-    runs-on: ubuntu-latest
+  publish:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Delete all GitHub Releases and release tags
+      - name: Download verified Riu source base
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
-          set -euo pipefail
-          mapfile -t tags < <(gh release list --limit 1000 --json tagName --jq '.[].tagName')
-          echo "Found ${#tags[@]} releases"
-          for tag in "${tags[@]}"; do
-            echo "Deleting release $tag"
-            gh release delete "$tag" --yes --cleanup-tag
-          done
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
 
-      - name: Verify no releases remain
+      - name: Apply latest Riu fixes
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
-          set -euo pipefail
-          count=$(gh release list --limit 1000 --json tagName --jq 'length')
-          if [ "$count" != "0" ]; then
-            echo "Releases still remain: $count"
-            gh release list --limit 1000
-            exit 1
-          fi
-          echo "All releases removed"
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS hotfix helper' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS hotfix failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
 
-      - name: Record cleanup status
+      - name: Apply Free edition restrictions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/free-riuclicker.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free edition patch failed' }
+
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.0</Version>' -SimpleMatch)) { throw 'Free 1.0 version missing' }
+          if (-not (Select-String -Path 'src/Models.cs' -Pattern 'Free RiuClicker' -SimpleMatch)) { throw 'Free branding missing' }
+          if (-not (Select-String -Path 'src/Localization.cs' -Pattern 'CurrentLanguage { get; private set; } = "en"' -SimpleMatch)) { throw 'English-only localization missing' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="turbo"' -SimpleMatch) { throw 'Turbo macro mode still visible' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="instant"' -SimpleMatch) { throw 'Instant macro mode still visible' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Content="↗   Wallhop"' -SimpleMatch) { throw 'Wallhop navigation still visible' }
+          if (Select-String -Path 'src/MainWindow.Extras.cs' -Pattern 'if (string.Equals(_settings.Wallhop.Hotkey, key' -SimpleMatch) { throw 'Wallhop hotkey still active' }
+          if (Select-String -Path 'src/Engines.cs' -Pattern '"turbo" =>' -SimpleMatch) { throw 'Turbo preset still active in engine' }
+          if (Select-String -Path 'src/Engines.cs' -Pattern '"instant" =>' -SimpleMatch) { throw 'Instant preset still active in engine' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Free RiuClicker
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=FreeRiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/free
+          if ($LASTEXITCODE -ne 0) { throw 'Free RiuClicker build failed' }
+          Copy-Item out/free/FreeRiuClicker.exe out/Free-RiuClicker.exe
+
+      - name: Package Free RiuClicker
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'out/Free-RiuClicker.exe')) { throw 'Free-RiuClicker.exe missing' }
+          if ((Get-Item 'out/Free-RiuClicker.exe').Length -lt 10000000) { throw 'Free-RiuClicker.exe unexpectedly small' }
+          Compress-Archive -Path src/* -DestinationPath out/Free-RiuClicker-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/Free-RiuClicker.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/Free-RiuClicker.zip -Force
+
+      - name: Publish Free RiuClicker release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# Free RiuClicker 1.0',
+            '',
+            'Free English-only edition.',
+            '',
+            'Included:',
+            '- Auto Clicker',
+            '- Coordinates',
+            '- Macros with Stable and Fast modes',
+            '- Profiles',
+            '- Photo and video backgrounds',
+            '- Precise CPS timing',
+            '',
+            'Removed from the Free edition:',
+            '- Wallhop',
+            '- Turbo macro mode',
+            '- Instant macro mode',
+            '- Strawberry Clicker',
+            '- Additional interface languages'
+          ) | Set-Content release-notes.md
+
+          $assets = @('out/Free-RiuClicker.exe','out/Free-RiuClicker.zip','out/Free-RiuClicker-Source.zip')
+          gh release view free-v1.0 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload free-v1.0 $assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload Free RiuClicker assets' }
+            gh release edit free-v1.0 --title 'Free RiuClicker 1.0' --notes-file release-notes.md --latest
+          } else {
+            gh release create free-v1.0 $assets --title 'Free RiuClicker 1.0' --notes-file release-notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Free RiuClicker release' }
+
+      - name: Verify public Free release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view free-v1.0 --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'free-v1.0') { throw 'Wrong Free release tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('Free-RiuClicker.exe','Free-RiuClicker.zip','Free-RiuClicker-Source.zip')) {
+            if ($name -notin $names) { throw "$name missing from public Free release" }
+          }
+          if ($names -match 'Strawberry') { throw 'Strawberry asset must not be present' }
+          Write-Host "Verified public Free release: $($release.url)"
+
+      - name: Record Free publish status
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          printf 'status=%s\nrun_id=%s\naction=remove-all-autoclicker-releases\n' "${{ job.status }}" "${{ github.run_id }}" > release-cleanup-status.txt
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=free-v1.0',
+            'build=free-english-no-wallhop-no-turbo-instant'
+          ) | Set-Content publish-free-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add release-cleanup-status.txt
-          git commit -m 'Record release cleanup status' || true
-          git push || true
+          git add publish-free-status.txt
+          git commit -m 'Record Free RiuClicker publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
