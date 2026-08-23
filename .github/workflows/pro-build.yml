@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/pro-build.yml'
       - '.build/pro-build-trigger.txt'
   workflow_dispatch:
 
