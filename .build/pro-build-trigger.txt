@@ -1,2 +1,2 @@
-build RiuClicker Pro 1.0 · Bolt Push + Bolts + Wallhop + E/V Lobby
-trigger=4
+build RiuClicker Pro 1.0 · source export for voice update
+trigger=5
