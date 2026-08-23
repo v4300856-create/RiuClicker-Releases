@@ -1,3 +1,4 @@
+# free-build-trigger-2
 from pathlib import Path
 
 root=Path('src')
@@ -17,7 +18,6 @@ s=s.replace('public const string DefaultIntro = "xDragonsx on top";', 'public co
 s=s.replace('''    public static void ApplyDefaults(AppSettings s)\n    {\n        if (!IsStrawberry) return;''','''    public static void ApplyDefaults(AppSettings s)\n    {\n        s.Appearance.Language = "en";\n        if (!IsStrawberry) return;''')
 save(p,s)
 
-# Localization is permanently English in free build
 p,s=rw('Localization.cs')
 s=s.replace('public static string CurrentLanguage { get; private set; } = "ru";', 'public static string CurrentLanguage { get; private set; } = "en";')
 old='''    public static void SetLanguage(string? code)\n    {\n        CurrentLanguage = Languages.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)) ? code! : "ru";\n    }'''
@@ -28,7 +28,6 @@ else:
     s=re.sub(r'public static void SetLanguage\(string\? code\)\s*\{.*?\n\s*\}', 'public static void SetLanguage(string? code)\n    {\n        CurrentLanguage = "en";\n    }', s, count=1, flags=re.S)
 save(p,s)
 
-# Branding labels
 p,s=rw('BrandVisual.cs')
 s=s.replace('Title = $"{BrandInfo.Name} 5.22 · Nova Control";', 'Title = "Free RiuClicker";')
 s=s.replace('var name = BrandInfo.IsStrawberry ? "STRAWBERRY CLICKER" : "RIU CLICKER";', 'var name = "FREE RIUCLICKER";')
@@ -37,7 +36,6 @@ s=s.replace('SidebarBrandVersionText.Text = "5.22  •  NOVA CONTROL";', 'Sideba
 s=s.replace('SidebarBrandVisualHint.Text = BrandInfo.IsStrawberry ? "3D · STRAWBERRY" : "3D · RIU";', 'SidebarBrandVisualHint.Text = "3D · FREE";')
 save(p,s)
 
-# Disable wallhop runtime, force English each launch, remove wallhop dashboard updates/conflicts
 p,s=rw('MainWindow.xaml.cs')
 s=s.replace('''    private async void Window_Loaded(object sender, RoutedEventArgs e)\n    {\n        LoadUiFromSettings();''','''    private async void Window_Loaded(object sender, RoutedEventArgs e)\n    {\n        _settings.Appearance.Language = "en";\n        _settings.Wallhop.Hotkey = "";\n        Localization.SetLanguage("en");\n        LoadUiFromSettings();''')
 s=s.replace('        PageWallhop.Visibility = page == "Wallhop" ? Visibility.Visible : Visibility.Collapsed;', '        PageWallhop.Visibility = Visibility.Collapsed;')
@@ -47,7 +45,6 @@ s=s.replace('        Add(_settings.Wallhop.Hotkey, "Wallhop");\n','')
 s=s.replace('        LoadWallhopUi();\n','')
 save(p,s)
 
-# Disable wallhop hotkey capture and remove turbo/instant macro modes
 p,s=rw('MainWindow.Extras.cs')
 s=s.replace('''        if (string.Equals(_settings.Wallhop.Hotkey, key, StringComparison.OrdinalIgnoreCase))\n        {\n            StartWallhop();\n            return;\n        }\n''','')
 s=s.replace('        else if (target == "wallhop") _settings.Wallhop.Hotkey = key;\n','')
@@ -60,12 +57,10 @@ s=s.replace('        RefreshClickerRuntime(1); RefreshClickerRuntime(2); Refresh
 s=s.replace('        SelectComboByTag(LanguageBox, a.Language);', '        _settings.Appearance.Language = "en";\n        SelectComboByTag(LanguageBox, "en");')
 save(p,s)
 
-# Engine allows only stable/fast presets
 p,s=rw('Engines.cs')
 s=s.replace('''        m.SpeedMode = mode;\n        (m.KeyHoldMs, m.ModifierHoldMs, m.StepGapMs, m.PointerSettleMs) = mode switch\n        {\n            "stable" => (35, 90, 55, 40),\n            "turbo" => (4, 12, 2, 4),\n            "instant" => (1, 5, 0, 1),\n            _ => (12, 35, 8, 12)\n        };''','''        mode = mode == "stable" ? "stable" : "fast";\n        m.SpeedMode = mode;\n        (m.KeyHoldMs, m.ModifierHoldMs, m.StepGapMs, m.PointerSettleMs) = mode switch\n        {\n            "stable" => (35, 90, 55, 40),\n            _ => (12, 35, 8, 12)\n        };''')
 save(p,s)
 
-# XAML: no wallhop navigation, only 2 macro presets, English-only language, free branding
 p,s=rw('MainWindow.xaml')
 s=s.replace('Text="RIU CLICKER"', 'Text="FREE RIUCLICKER"')
 s=s.replace('Text="5.22  •  NOVA CONTROL"', 'Text="FREE  •  RIUCLICKER"')
@@ -87,7 +82,6 @@ s=s.replace('Text="F8 — кликер 1   ·   F9 — кликер 2   ·   F7 
 s=s.replace('Text="Mouse4 / Mouse5 можно назначать для запуска кликеров, макросов и воллхопа. Синтетические клавиши из макроса не запускают горячие клавиши повторно."', 'Text="Mouse4 / Mouse5 can be assigned to clickers and macros. Synthetic macro input never retriggers hotkeys."')
 save(p,s)
 
-# project version
 p,s=rw('RiuClickerCS.csproj')
 s=s.replace('<Version>5.22.0</Version>','<Version>1.0.0</Version>')
 s=s.replace('<AssemblyVersion>5.22.0.0</AssemblyVersion>','<AssemblyVersion>1.0.0.0</AssemblyVersion>')
