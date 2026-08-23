@@ -1,0 +1,5 @@
+status=success
+run_id=32644179155
+commit=01b6457f49234fcd842e4a0e8f9cf546e475e021
+tag=free-v1.0
+build=free-english-no-wallhop-no-turbo-instant
