@@ -59,7 +59,7 @@ jobs:
           import base64, gzip, hashlib, pathlib
           encoded = pathlib.Path('.build/pro-riuclicker.py.gz.b64').read_text(encoding='utf-8').strip()
           raw = gzip.decompress(base64.b64decode(encoded))
-          expected = 'f74a5f7417c929dbb91aab5071564f1541fe400dd833d0a3119deadd662fae86'
+          expected = 'b0e5fa05132e8b4e836b3e918fab69cc6845294d5f64a6bdfeda3d755a23fc70'
           actual = hashlib.sha256(raw).hexdigest()
           if actual != expected:
               raise SystemExit(f'Pro patch SHA mismatch: {actual}')
