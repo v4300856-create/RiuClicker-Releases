@@ -1,0 +1,5 @@
+status=failure
+run_id=32648565843
+commit=42814a2b32cb4cf143a562f8309358a35448e8f2
+build=RiuClicker-Pro-1.0-Test
+public_release=no
