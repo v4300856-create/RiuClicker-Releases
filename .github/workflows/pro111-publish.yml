@@ -1,0 +1,147 @@
+name: Publish RiuClicker Pro 1.1.1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/pro111-publish-trigger.txt'
+      - '.github/workflows/pro111-publish.yml'
+      - '.build/pro11-dual-actions-hotfix.py'
+      - '.build/pro-src/MainWindow.Pro.cs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-pro111
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Pro 1.1 source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9508562188/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download Pro 1.1 artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'RiuClicker-Pro-1.1-Beta-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Pro 1.1 source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Apply VVV ordering and dual-action fixes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Copy-Item '.build/pro-src/MainWindow.Pro.cs' 'src/MainWindow.Pro.cs' -Force
+          python .build/pro11-dual-actions-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Dual-action hotfix failed' }
+          $proj = Get-Content 'src/RiuClickerCS.csproj' -Raw
+          $proj = $proj.Replace('<Version>1.1.0</Version>', '<Version>1.1.1</Version>')
+          $proj = $proj.Replace('<FileVersion>1.1.0.0</FileVersion>', '<FileVersion>1.1.1.0</FileVersion>')
+          $proj = $proj.Replace('<AssemblyVersion>1.1.0.0</AssemblyVersion>', '<AssemblyVersion>1.1.1.0</AssemblyVersion>')
+          Set-Content 'src/RiuClickerCS.csproj' $proj -Encoding UTF8
+
+      - name: Validate Pro 1.1.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          if (-not (Select-String 'src/MainWindow.Pro.cs' -Pattern 'TapTripleVOrdered' -SimpleMatch)) { throw 'Ordered VVV helper missing' }
+          if (-not (Select-String 'src/MainWindow.Pro.cs' -Pattern 'await TapTripleVOrdered(t, beforeShift: true);' -SimpleMatch)) { throw 'Bolt Push VVV ordering fix missing' }
+          if (Select-String 'src/MainWindow.Pro.cs' -Pattern '_settings.ProActions.Bolts.Enabled = false;' -SimpleMatch) { throw 'Bolt Push still disables Bolts' }
+          if (Select-String 'src/MainWindow.Pro.cs' -Pattern '_settings.ProActions.BoltPush.Enabled = false;' -SimpleMatch) { throw 'Bolts still disables Bolt Push' }
+          if (Select-String 'src/Models.cs' -Pattern 's.ProActions.Bolts.Enabled = false' -SimpleMatch) { throw 'Settings still enforce mutual exclusion' }
+          if (-not (Select-String 'src/MainWindow.xaml' -Pattern 'can be armed together' -SimpleMatch)) { throw 'Dual-action UI text missing' }
+          if (-not (Select-String 'src/MainWindow.xaml.cs' -Pattern 'e.Key == Key.Tab' -SimpleMatch)) { throw 'TAB fix missing' }
+          if (-not (Select-String 'src/RiuClickerCS.csproj' -Pattern '<Version>1.1.1</Version>' -SimpleMatch)) { throw 'Version 1.1.1 missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker Pro 1.1.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClickerPro `
+            -p:ApplicationIcon=app.ico `
+            -o out/pro
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          Copy-Item out/pro/RiuClickerPro.exe out/RiuClicker-Pro-1.1.1-Beta.exe
+          if ((Get-Item 'out/RiuClicker-Pro-1.1.1-Beta.exe').Length -lt 10000000) { throw 'EXE unexpectedly small' }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-Pro-1.1.1-Beta.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-1.1.1-Beta.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-Pro-1.1.1-Beta-Source.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-1.1.1-Beta
+          path: |
+            out/RiuClicker-Pro-1.1.1-Beta.exe
+            out/RiuClicker-Pro-1.1.1-Beta.zip
+            out/RiuClicker-Pro-1.1.1-Beta-Source.zip
+          retention-days: 30
+
+      - name: Publish beta release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker Pro 1.1.1 Beta',
+            '',
+            'Free RiuClicker is unchanged.',
+            '',
+            'Fixes:',
+            '- Bolt Push Instant now guarantees V V V completes before the second Shift',
+            '- Bolt Push and Bolts can both be enabled at the same time',
+            '- Each action keeps its own hotkey and Stable / Fast / Turbo / Instant speed',
+            '- Same-hotkey conflict protection remains',
+            '- TAB hotkey fix and Prism Command interface retained',
+            '- Wallhop and Squad Sync retained'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-Pro-1.1.1-Beta.exe','out/RiuClicker-Pro-1.1.1-Beta.zip','out/RiuClicker-Pro-1.1.1-Beta-Source.zip')
+          gh release view pro-v1.1.1-beta --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload pro-v1.1.1-beta $assets --clobber
+            gh release edit pro-v1.1.1-beta --title 'RiuClicker Pro 1.1.1 Beta' --notes-file notes.md --prerelease
+          } else {
+            gh release create pro-v1.1.1-beta $assets --title 'RiuClicker Pro 1.1.1 Beta' --notes-file notes.md --target main --prerelease
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release publish failed' }
+
+      - name: Record status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=pro-v1.1.1-beta',
+            'build=ordered-vvv-dual-actions'
+          ) | Set-Content publish-pro111-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add publish-pro111-status.txt
+          git commit -m 'Record RiuClicker Pro 1.1.1 publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
