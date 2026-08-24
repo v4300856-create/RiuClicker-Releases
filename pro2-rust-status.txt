@@ -1,0 +1,5 @@
+status=failure
+run_id=32703522090
+commit=2b7cb3702dc32f4e8215af3dd3b05f97faf2a7ed
+tag=pro-v2.0-rust-beta
+engine=rust-tauri-aether
