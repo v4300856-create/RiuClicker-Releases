@@ -21,27 +21,27 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Download Rust Pro source bundle from pro2-rust branch
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Restore Rust Pro source from pro2-rust branch
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          Remove-Item pro2-rust.tar.gz.b64 -ErrorAction SilentlyContinue
-          foreach ($part in @('00','01','02','03','04')) {
-            gh api -H 'Accept: application/vnd.github.raw' "/repos/${{ github.repository }}/contents/.build/pro2-rust.part$part?ref=pro2-rust" | Add-Content -NoNewline pro2-rust.tar.gz.b64
-            if ($LASTEXITCODE -ne 0) { throw "Could not fetch source part $part" }
-          }
-          $bytes = [Convert]::FromBase64String((Get-Content pro2-rust.tar.gz.b64 -Raw))
-          [IO.File]::WriteAllBytes((Join-Path $PWD 'pro2-rust.tar.gz'), $bytes)
-          $hash = (Get-FileHash pro2-rust.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc') { throw "Source bundle hash mismatch: $hash" }
+          set -euo pipefail
+          git fetch --no-tags origin pro2-rust:refs/remotes/origin/pro2-rust
+          : > pro2-rust.tar.gz.b64
+          for part in 00 01 02 03 04; do
+            git show "origin/pro2-rust:.build/pro2-rust.part${part}" >> pro2-rust.tar.gz.b64
+          done
+          tr -d '\r\n' < pro2-rust.tar.gz.b64 | base64 -d > pro2-rust.tar.gz
+          echo 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc  pro2-rust.tar.gz' | sha256sum -c -
+          rm -rf pro2-rust
           tar -xzf pro2-rust.tar.gz
-          if ($LASTEXITCODE -ne 0) { throw 'Could not extract Rust source bundle' }
-          if (-not (Test-Path 'pro2-rust/src-tauri/src/main.rs')) { throw 'Rust main.rs missing' }
-          if (-not (Select-String 'pro2-rust/ui/index.html' -Pattern 'RIUCLICKER PRO' -SimpleMatch)) { throw 'Aether intro missing' }
-          if (-not (Select-String 'pro2-rust/src-tauri/src/main.rs' -Pattern 'triple_v_ordered' -SimpleMatch)) { throw 'VVV ordering core missing' }
+          test -f pro2-rust/src-tauri/src/main.rs
+          test -f pro2-rust/ui/index.html
+          grep -q 'RIUCLICKER PRO' pro2-rust/ui/index.html
+          grep -q 'triple_v_ordered' pro2-rust/src-tauri/src/main.rs
+          grep -q "'TAB'" pro2-rust/ui/app.js
 
       - uses: dtolnay/rust-toolchain@stable
 
