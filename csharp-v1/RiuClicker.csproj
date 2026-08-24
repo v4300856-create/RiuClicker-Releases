@@ -8,6 +8,9 @@
     <AssemblyName>RiuClicker</AssemblyName>
     <RootNamespace>RiuClicker</RootNamespace>
     <Version>1.0.0</Version>
-    <ApplicationIcon>app.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 </Project>
