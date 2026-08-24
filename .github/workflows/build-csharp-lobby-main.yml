@@ -31,6 +31,7 @@ jobs:
           test -f source/csharp-v1/MainWindow.xaml.cs
           test -f source/csharp-v1/relay/src/index.ts
           grep -Fq 'ClientWebSocket' source/csharp-v1/LobbyService.cs
+          grep -Fq 'room=' source/csharp-v1/LobbyService.cs
           grep -Fq 'RELAY LOBBY' source/csharp-v1/MainWindow.xaml
 
       - uses: actions/setup-dotnet@v4
@@ -82,7 +83,7 @@ jobs:
             '- Live player list on join and leave',
             '- Real RTT ping to relay',
             '- Instant sync test signal',
-            '- Cloudflare Durable Object relay source included'
+            '- Room-isolated Cloudflare Durable Object relay source included'
           ) | Set-Content notes.md
           $assets = @('out/RiuClicker-CSharp-Lobby-1.0.exe','out/RiuClicker-CSharp-Lobby-1.0.zip','out/RiuClicker-CSharp-Lobby-1.0.sha256.txt')
           gh release view csharp-lobby-v1.0 --json tagName *> $null
@@ -104,7 +105,7 @@ jobs:
             "commit=${{ github.sha }}",
             'source_branch=csharp-v1',
             'tag=csharp-lobby-v1.0',
-            'build=csharp-relay-lobby-v4'
+            'build=csharp-relay-lobby-v5'
           ) | Set-Content csharp-lobby-main-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
