@@ -1,6 +1,6 @@
-status=success
-run_id=32734634412
-commit=23f10d3addc7de03e2568c8040a80070c03484c3
+status=failure
+run_id=32736368083
+commit=569e6f82dbf88cf35405fb546be829f368e90b63
 source_branch=csharp-v1
 tag=csharp-lobby-v1.0
-build=csharp-low-latency-lobby-v3
+build=csharp-relay-lobby-v4
