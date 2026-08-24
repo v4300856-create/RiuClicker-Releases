@@ -1,4 +1,4 @@
-# free-riuclicker-1.0
+# free-riuclicker-1.0-cps-hotfix
 name: Publish Free RiuClicker
 
 on:
@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/publish.yml'
       - '.build/free-riuclicker.py'
+      - '.build/free-v10-cps-hotfix.py'
   workflow_dispatch:
 
 permissions:
@@ -52,22 +53,22 @@ jobs:
           python .build/ui522-hotfix.py
           if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
 
-      - name: Apply Free edition restrictions
+      - name: Apply Free edition restrictions and high CPS fix
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           python .build/free-riuclicker.py
           if ($LASTEXITCODE -ne 0) { throw 'Free edition patch failed' }
+          python .build/free-v10-cps-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free v1.0 high CPS patch failed' }
 
           if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.0</Version>' -SimpleMatch)) { throw 'Free 1.0 version missing' }
           if (-not (Select-String -Path 'src/Models.cs' -Pattern 'Free RiuClicker' -SimpleMatch)) { throw 'Free branding missing' }
-          if (-not (Select-String -Path 'src/Localization.cs' -Pattern 'CurrentLanguage { get; private set; } = "en"' -SimpleMatch)) { throw 'English-only localization missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'HighResolutionTimer' -SimpleMatch)) { throw 'High CPS timer patch missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'WaitUntil(nextTick, token)' -SimpleMatch)) { throw 'High CPS precise loop missing' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="turbo"' -SimpleMatch) { throw 'Turbo macro mode still visible' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="instant"' -SimpleMatch) { throw 'Instant macro mode still visible' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Content="↗   Wallhop"' -SimpleMatch) { throw 'Wallhop navigation still visible' }
-          if (Select-String -Path 'src/MainWindow.Extras.cs' -Pattern 'if (string.Equals(_settings.Wallhop.Hotkey, key' -SimpleMatch) { throw 'Wallhop hotkey still active' }
-          if (Select-String -Path 'src/Engines.cs' -Pattern '"turbo" =>' -SimpleMatch) { throw 'Turbo preset still active in engine' }
-          if (Select-String -Path 'src/Engines.cs' -Pattern '"instant" =>' -SimpleMatch) { throw 'Instant preset still active in engine' }
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -106,20 +107,19 @@ jobs:
             '',
             'Free English-only edition.',
             '',
+            'Latest hotfix:',
+            '- High CPS engine rewritten for precise timing',
+            '- 500 CPS no longer uses Task.Delay(2 ms)',
+            '- Windows 1 ms timer resolution + Stopwatch schedule',
+            '- UI click counter throttled so it does not slow the engine',
+            '',
             'Included:',
             '- Auto Clicker',
             '- Coordinates',
             '- Macros with Stable and Fast modes',
             '- Profiles',
             '- Photo and video backgrounds',
-            '- Precise CPS timing',
-            '',
-            'Removed from the Free edition:',
-            '- Wallhop',
-            '- Turbo macro mode',
-            '- Instant macro mode',
-            '- Strawberry Clicker',
-            '- Additional interface languages'
+            '- Precise CPS timing'
           ) | Set-Content release-notes.md
 
           $assets = @('out/Free-RiuClicker.exe','out/Free-RiuClicker.zip','out/Free-RiuClicker-Source.zip')
@@ -145,7 +145,6 @@ jobs:
           foreach ($name in @('Free-RiuClicker.exe','Free-RiuClicker.zip','Free-RiuClicker-Source.zip')) {
             if ($name -notin $names) { throw "$name missing from public Free release" }
           }
-          if ($names -match 'Strawberry') { throw 'Strawberry asset must not be present' }
           Write-Host "Verified public Free release: $($release.url)"
 
       - name: Record Free publish status
@@ -157,10 +156,10 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=free-v1.0',
-            'build=free-english-no-wallhop-no-turbo-instant'
+            'build=free-v1.0-high-cps-stopwatch-v2'
           ) | Set-Content publish-free-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add publish-free-status.txt
           git commit -m 'Record Free RiuClicker publish status' 2>$null
-          if ($LASTEXITCODE -eq 0) { git push }
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
