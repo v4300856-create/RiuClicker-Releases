@@ -59,8 +59,8 @@ jobs:
           p = Path('pro2-rust/src-tauri/src/main.rs')
           s = p.read_text(encoding='utf-8')
 
-          s, n1 = re.subn(r'\bXBUTTON1\s+as\s+u32\b', '1u32', s)
-          s, n2 = re.subn(r'\bXBUTTON2\s+as\s+u32\b', '2u32', s)
+          s, n1 = re.subn(r'\bXBUTTON1\s+as\s+u32\b', '1i32', s)
+          s, n2 = re.subn(r'\bXBUTTON2\s+as\s+u32\b', '2i32', s)
           s, n3 = re.subn(r'\bXBUTTON1\b\s*,?', '', s, count=1)
           s, n4 = re.subn(r'\bXBUTTON2\b\s*,?', '', s, count=1)
           s, n5 = re.subn(r'\bGetAsyncKeyState\s*,\s*', '', s, count=1)
@@ -185,7 +185,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=winapi-import-fix-v5',
+            'build=winapi-type-fix-v6',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
