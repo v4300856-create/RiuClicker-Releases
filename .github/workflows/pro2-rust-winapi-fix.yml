@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/pro2-rust-winapi-fix.yml'
+      - '.build/pro2-hotkey-intro-hotfix.py'
   workflow_dispatch:
 
 permissions:
@@ -80,6 +81,17 @@ jobs:
           p.write_text(s, encoding='utf-8', newline='\n')
           print('WinAPI patch OK')
           PY
+
+      - name: Apply native hotkey and 5.22 intro hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .build/pro2-hotkey-intro-hotfix.py
+          grep -Fq 'capture_hotkey_blocking' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'capture_hotkey,' pro2-rust/src-tauri/src/main.rs
+          grep -Fq "invoke('capture_hotkey')" pro2-rust/ui/app.js
+          grep -Fq 'xDragonsx on top' pro2-rust/ui/index.html
+          node --check pro2-rust/ui/app.js
 
       - name: Generate Windows icon
         shell: pwsh
@@ -159,8 +171,8 @@ jobs:
           @(
             '# RiuClicker Pro 2.0 Beta',
             '',
-            '- Rust rewrite with Aether UI',
-            '- Immediate hotkey labels',
+            '- Native Windows hotkey capture now shows the actual key instead of sticking on TAB',
+            '- Startup window shows xDragonsx on top in the 5.22-style intro',
             '- Bolt Push + Bolts can stay enabled together',
             '- Macro sequencing serialized; V V V completes before Shift in Instant mode',
             '- Macro Lobby with explicit Owner/Member join and local E/V action mapping',
@@ -185,7 +197,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=winapi-type-fix-v6',
+            'build=native-hotkey-intro-v7',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
