@@ -1,0 +1,5 @@
+status=success
+run_id=32699510230
+commit=77a4ca7044b7e2394c5c087e4b42e81ae3bb98ca
+tag=pro-v1.1.2-beta
+build=instant-hotkey-button-label
