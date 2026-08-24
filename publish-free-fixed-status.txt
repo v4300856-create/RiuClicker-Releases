@@ -1,0 +1,5 @@
+status=failure
+run_id=32754280995
+commit=1ac157cfcc3b212b207a86deb50e498cf1bbd4ae
+tag=free-v1.0-fixed
+build=free-v1.0-fixed-cps-and-final-click
