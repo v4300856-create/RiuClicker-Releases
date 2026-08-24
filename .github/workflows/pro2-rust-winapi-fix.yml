@@ -55,15 +55,15 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = 'pro2-rust/src-tauri/src/main.rs'
           $s = Get-Content $path -Raw
-          $before = $s
-          $s = $s.Replace('MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1, XBUTTON2,', 'MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, GetAsyncKeyState,')
-          $s = $s.Replace('WindowsAndMessaging::{GetAsyncKeyState, GetCursorPos, SetCursorPos},', 'WindowsAndMessaging::{GetCursorPos, SetCursorPos},')
-          $s = $s.Replace('XBUTTON1 as u32', '1u32')
-          $s = $s.Replace('XBUTTON2 as u32', '2u32')
-          if ($s -eq $before) { throw 'WinAPI import patch did not change main.rs' }
+          $s = $s -replace 'MOUSEEVENTF_XDOWN,\s*MOUSEEVENTF_XUP,\s*XBUTTON1,\s*XBUTTON2,', 'MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, GetAsyncKeyState,'
+          $s = $s -replace 'WindowsAndMessaging::\{\s*GetAsyncKeyState,\s*GetCursorPos,\s*SetCursorPos\s*\}', 'WindowsAndMessaging::{GetCursorPos, SetCursorPos}'
+          $s = $s -replace '\bXBUTTON1\s+as\s+u32\b', '1u32'
+          $s = $s -replace '\bXBUTTON2\s+as\s+u32\b', '2u32'
           Set-Content -Path $path -Value $s -NoNewline
-          if (Select-String -Path $path -Pattern 'XBUTTON1|XBUTTON2' -Quiet) { throw 'XBUTTON constants still present' }
-          if (-not (Select-String -Path $path -Pattern 'GetAsyncKeyState' -Quiet)) { throw 'GetAsyncKeyState missing after patch' }
+          if (Select-String -Path $path -Pattern '\bXBUTTON1\b|\bXBUTTON2\b' -Quiet) { throw 'XBUTTON symbols still present after WinAPI patch' }
+          $head = (Get-Content $path -TotalCount 45) -join "`n"
+          if ($head -notmatch 'KeyboardAndMouse::\{[\s\S]*GetAsyncKeyState') { throw 'GetAsyncKeyState was not moved to KeyboardAndMouse' }
+          Write-Host 'WinAPI import patch OK'
 
       - name: Generate Windows icon
         shell: pwsh
@@ -169,11 +169,11 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=winapi-import-fix',
+            'build=winapi-import-fix-v2',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add pro2-fix-status.txt
           git commit -m 'Record RiuClicker Pro 2.0 fixed build status' 2>$null
-          if ($LASTEXITCODE -eq 0) { git push }
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
