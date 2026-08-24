@@ -17,7 +17,7 @@ public partial class MainWindow : Window
         _lobby.Log += text => Dispatcher.Invoke(() => AddLog(text));
         _lobby.PingChanged += ping => Dispatcher.Invoke(() => PingText.Text = ping < 0 ? "PING —" : $"PING {ping} ms");
         _lobby.ActionReceived += (from, action) => Dispatcher.Invoke(() => AddLog($"{from} → {action}"));
-        AddLog("Lobby ready");
+        AddLog("Relay lobby ready");
     }
 
     private async void Host_Click(object sender, RoutedEventArgs e)
@@ -25,16 +25,15 @@ public partial class MainWindow : Window
         try
         {
             SetBusy(true);
-            if (!int.TryParse(PortBox.Text.Trim(), out int port)) port = 42871;
-            string code = await _lobby.HostAsync(NameBox.Text, port);
+            string code = await _lobby.HostAsync(NameBox.Text, RelayUrlBox.Text);
             CodeBox.Text = code;
             JoinCodeBox.Text = code;
             AddLog("Share the code with your friend");
         }
         catch (Exception ex)
         {
-            AddLog("Host error: " + ex.Message);
-            MessageBox.Show(ex.Message, "RiuClicker Lobby", MessageBoxButton.OK, MessageBoxImage.Error);
+            AddLog("Relay host error: " + ex.Message);
+            MessageBox.Show(ex.Message, "RiuClicker Relay Lobby", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { SetBusy(false); }
     }
@@ -44,12 +43,12 @@ public partial class MainWindow : Window
         try
         {
             SetBusy(true);
-            await _lobby.JoinAsync(JoinCodeBox.Text, NameBox.Text);
+            await _lobby.JoinAsync(JoinCodeBox.Text, NameBox.Text, RelayUrlBox.Text);
         }
         catch (Exception ex)
         {
-            AddLog("Join error: " + ex.Message);
-            MessageBox.Show(ex.Message, "RiuClicker Lobby", MessageBoxButton.OK, MessageBoxImage.Error);
+            AddLog("Relay join error: " + ex.Message);
+            MessageBox.Show(ex.Message, "RiuClicker Relay Lobby", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally { SetBusy(false); }
     }
@@ -58,7 +57,7 @@ public partial class MainWindow : Window
     {
         await _lobby.StopAsync();
         CodeBox.Text = "";
-        AddLog("Left lobby");
+        AddLog("Left relay lobby");
     }
 
     private void CopyCode_Click(object sender, RoutedEventArgs e)
@@ -73,12 +72,9 @@ public partial class MainWindow : Window
         try
         {
             await _lobby.SendActionAsync("SYNC_TEST");
-            AddLog("Test signal sent");
+            AddLog("Instant test signal sent");
         }
-        catch (Exception ex)
-        {
-            AddLog("Signal error: " + ex.Message);
-        }
+        catch (Exception ex) { AddLog("Signal error: " + ex.Message); }
     }
 
     private void UpdateMembers(IReadOnlyList<string> members)
@@ -96,8 +92,7 @@ public partial class MainWindow : Window
             "MEMBER" => new SolidColorBrush(Color.FromRgb(139, 92, 246)),
             _ => new SolidColorBrush(Color.FromRgb(100, 116, 139))
         };
-        if (role == "OWNER") PingText.Text = "DIRECT";
-        else if (role == "OFFLINE") PingText.Text = "PING —";
+        if (role == "OFFLINE") PingText.Text = "PING —";
     }
 
     private void AddLog(string text)
@@ -112,7 +107,7 @@ public partial class MainWindow : Window
     {
         HostButton.IsEnabled = !busy;
         JoinButton.IsEnabled = !busy;
-        StatusText.Text = busy ? "Connecting…" : StatusText.Text;
+        StatusText.Text = busy ? "Connecting to relay…" : StatusText.Text;
     }
 
     protected override void OnClosing(CancelEventArgs e)
