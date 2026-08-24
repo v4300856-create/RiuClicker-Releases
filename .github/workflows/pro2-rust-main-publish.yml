@@ -54,6 +54,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          Push-Location pro2-rust/src-tauri
+          cargo add tauri --features protocol-asset
+          if ($LASTEXITCODE -ne 0) { throw 'Could not enable Tauri protocol-asset feature' }
+          Pop-Location
           cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
           New-Item -ItemType Directory -Path out -Force | Out-Null
