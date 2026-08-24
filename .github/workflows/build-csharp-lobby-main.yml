@@ -1,4 +1,4 @@
-name: Build CSharp Lobby From Branch
+name: Build RiuClicker CSharp 1.0
 
 on:
   push:
@@ -19,24 +19,56 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout C# source branch
+      - name: Checkout C# product source
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin csharp-v1
           git worktree add source origin/csharp-v1
           test -f source/csharp-v1/RiuClicker.csproj
-          test -f source/csharp-v1/LobbyService.cs
+          test -f source/csharp-v1/EngineService.cs
+          test -f source/csharp-v1/InputService.cs
           test -f source/csharp-v1/MainWindow.xaml
           test -f source/csharp-v1/MainWindow.xaml.cs
-          test -f source/csharp-v1/relay/src/index.ts
-          grep -Fq 'ClientWebSocket' source/csharp-v1/LobbyService.cs
-          grep -Fq 'room=' source/csharp-v1/LobbyService.cs
-          grep -Fq 'RELAY LOBBY' source/csharp-v1/MainWindow.xaml
+          test ! -f source/csharp-v1/LobbyService.cs
+          grep -Fq 'SendInput' source/csharp-v1/InputService.cs
+          grep -Fq 'ARM F6' source/csharp-v1/MainWindow.xaml
+          grep -Fq 'V V V' source/csharp-v1/MainWindow.xaml
+          if grep -Rqi 'relay lobby\|join lobby\|create lobby' source/csharp-v1 --include='*.cs' --include='*.xaml'; then
+            echo 'Lobby text still present in product source'
+            exit 1
+          fi
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Generate Riu icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Drawing
+          $bmp = [System.Drawing.Bitmap]::new(256,256)
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $rect = [System.Drawing.Rectangle]::new(0,0,256,256)
+          $brush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($rect,[System.Drawing.Color]::FromArgb(139,92,246),[System.Drawing.Color]::FromArgb(34,211,238),45.0)
+          $g.FillRectangle($brush,$rect)
+          $font = [System.Drawing.Font]::new('Segoe UI',148,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+          $format = [System.Drawing.StringFormat]::new()
+          $format.Alignment = [System.Drawing.StringAlignment]::Center
+          $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+          $g.DrawString('R',$font,[System.Drawing.Brushes]::White,[System.Drawing.RectangleF]::new(0,-8,256,256),$format)
+          $ms = [System.IO.MemoryStream]::new()
+          $bmp.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png)
+          $png = $ms.ToArray()
+          $fs = [System.IO.File]::Create('source/csharp-v1/app.ico')
+          $bw = [System.IO.BinaryWriter]::new($fs)
+          $bw.Write([uint16]0); $bw.Write([uint16]1); $bw.Write([uint16]1)
+          $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0); $bw.Write([byte]0)
+          $bw.Write([uint16]1); $bw.Write([uint16]32)
+          $bw.Write([uint32]$png.Length); $bw.Write([uint32]22); $bw.Write($png)
+          $bw.Dispose(); $fs.Dispose(); $ms.Dispose(); $font.Dispose(); $brush.Dispose(); $g.Dispose(); $bmp.Dispose()
 
       - name: Restore
         shell: pwsh
@@ -46,54 +78,62 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          dotnet build source/csharp-v1/RiuClicker.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'C# build failed' }
           dotnet publish source/csharp-v1/RiuClicker.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out
           if ($LASTEXITCODE -ne 0) { throw 'C# publish failed' }
           if (-not (Test-Path out/RiuClicker.exe)) { throw 'RiuClicker.exe missing' }
-          Copy-Item out/RiuClicker.exe out/RiuClicker-CSharp-Lobby-1.0.exe
+          Copy-Item out/RiuClicker.exe out/RiuClicker-1.0.exe
 
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path package -Force | Out-Null
-          Copy-Item out/RiuClicker-CSharp-Lobby-1.0.exe package/
-          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-CSharp-Lobby-1.0.zip -Force
-          (Get-FileHash out/RiuClicker-CSharp-Lobby-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-CSharp-Lobby-1.0.sha256.txt
+          Copy-Item out/RiuClicker-1.0.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-1.0.zip -Force
+          (Get-FileHash out/RiuClicker-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.0.sha256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RiuClicker-CSharp-Lobby-1.0
+          name: RiuClicker-1.0-CSharp
           path: |
-            out/RiuClicker-CSharp-Lobby-1.0.exe
-            out/RiuClicker-CSharp-Lobby-1.0.zip
-            out/RiuClicker-CSharp-Lobby-1.0.sha256.txt
+            out/RiuClicker-1.0.exe
+            out/RiuClicker-1.0.zip
+            out/RiuClicker-1.0.sha256.txt
           retention-days: 30
 
-      - name: Publish test release
+      - name: Publish RiuClicker 1.0 release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            '# RiuClicker C# Relay Lobby 1.0',
+            '# RiuClicker 1.0',
             '',
-            '- C# / WPF relay-only lobby build',
-            '- WebSocket relay instead of direct TCP',
-            '- No UPnP and no port forwarding in the client',
-            '- Live player list on join and leave',
-            '- Real RTT ping to relay',
-            '- Instant sync test signal',
-            '- Room-isolated Cloudflare Durable Object relay source included'
+            '- Native C# / WPF build',
+            '- Lobby completely removed',
+            '- Two independent clickers',
+            '- Native physical hotkey capture',
+            '- Bolt Push: V V V -> Shift with optional saved coordinate',
+            '- Bolts: V V V',
+            '- ARM F6 coordinate capture',
+            '- Left and right Wallhop controls',
+            '- F12 emergency stop',
+            '- RU / EN interface',
+            '- Photo / video background',
+            '- Startup xDragonsx on top notification',
+            '- Win32 SendInput engine'
           ) | Set-Content notes.md
-          $assets = @('out/RiuClicker-CSharp-Lobby-1.0.exe','out/RiuClicker-CSharp-Lobby-1.0.zip','out/RiuClicker-CSharp-Lobby-1.0.sha256.txt')
-          gh release view csharp-lobby-v1.0 --json tagName *> $null
+          $assets = @('out/RiuClicker-1.0.exe','out/RiuClicker-1.0.zip','out/RiuClicker-1.0.sha256.txt')
+          gh release view riu-csharp-v1.0 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload csharp-lobby-v1.0 $assets --clobber
-            gh release edit csharp-lobby-v1.0 --title 'RiuClicker C# Relay Lobby 1.0' --notes-file notes.md --prerelease
+            gh release upload riu-csharp-v1.0 $assets --clobber
+            gh release edit riu-csharp-v1.0 --title 'RiuClicker 1.0 · C#' --notes-file notes.md
           } else {
-            gh release create csharp-lobby-v1.0 $assets --title 'RiuClicker C# Relay Lobby 1.0' --notes-file notes.md --target csharp-v1 --prerelease
+            gh release create riu-csharp-v1.0 $assets --title 'RiuClicker 1.0 · C#' --notes-file notes.md --target csharp-v1
           }
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish C# lobby release' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish RiuClicker release' }
 
       - name: Record build status
         if: always()
@@ -104,11 +144,11 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'source_branch=csharp-v1',
-            'tag=csharp-lobby-v1.0',
-            'build=csharp-relay-lobby-v5'
-          ) | Set-Content csharp-lobby-main-status.txt
+            'tag=riu-csharp-v1.0',
+            'build=csharp-product-v1'
+          ) | Set-Content riu-csharp-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add csharp-lobby-main-status.txt
-          git commit -m 'Record C# relay lobby build status' 2>$null
+          git add riu-csharp-status.txt
+          git commit -m 'Record RiuClicker C# build status' 2>$null
           if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
