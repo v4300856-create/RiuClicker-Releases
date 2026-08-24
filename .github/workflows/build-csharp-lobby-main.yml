@@ -29,6 +29,9 @@ jobs:
           test -f source/csharp-v1/LobbyService.cs
           test -f source/csharp-v1/MainWindow.xaml
           test -f source/csharp-v1/MainWindow.xaml.cs
+          test -f source/csharp-v1/relay/src/index.ts
+          grep -Fq 'ClientWebSocket' source/csharp-v1/LobbyService.cs
+          grep -Fq 'RELAY LOBBY' source/csharp-v1/MainWindow.xaml
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -71,23 +74,23 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            '# RiuClicker C# Lobby 1.0',
+            '# RiuClicker C# Relay Lobby 1.0',
             '',
-            '- C# / WPF lobby-first build',
-            '- Persistent TCP with TCP_NODELAY',
-            '- Live player list updates on join and leave',
-            '- Real RTT ping display for members',
-            '- 500 ms heartbeat + TCP keepalive',
-            '- UPnP port mapping attempt on owner PC',
-            '- Instant test signal for sync testing'
+            '- C# / WPF relay-only lobby build',
+            '- WebSocket relay instead of direct TCP',
+            '- No UPnP and no port forwarding in the client',
+            '- Live player list on join and leave',
+            '- Real RTT ping to relay',
+            '- Instant sync test signal',
+            '- Cloudflare Durable Object relay source included'
           ) | Set-Content notes.md
           $assets = @('out/RiuClicker-CSharp-Lobby-1.0.exe','out/RiuClicker-CSharp-Lobby-1.0.zip','out/RiuClicker-CSharp-Lobby-1.0.sha256.txt')
           gh release view csharp-lobby-v1.0 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload csharp-lobby-v1.0 $assets --clobber
-            gh release edit csharp-lobby-v1.0 --title 'RiuClicker C# Lobby 1.0' --notes-file notes.md --prerelease
+            gh release edit csharp-lobby-v1.0 --title 'RiuClicker C# Relay Lobby 1.0' --notes-file notes.md --prerelease
           } else {
-            gh release create csharp-lobby-v1.0 $assets --title 'RiuClicker C# Lobby 1.0' --notes-file notes.md --target csharp-v1 --prerelease
+            gh release create csharp-lobby-v1.0 $assets --title 'RiuClicker C# Relay Lobby 1.0' --notes-file notes.md --target csharp-v1 --prerelease
           }
           if ($LASTEXITCODE -ne 0) { throw 'Could not publish C# lobby release' }
 
@@ -101,10 +104,10 @@ jobs:
             "commit=${{ github.sha }}",
             'source_branch=csharp-v1',
             'tag=csharp-lobby-v1.0',
-            'build=csharp-low-latency-lobby-v3'
+            'build=csharp-relay-lobby-v4'
           ) | Set-Content csharp-lobby-main-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add csharp-lobby-main-status.txt
-          git commit -m 'Record C# lobby main build status' 2>$null
+          git commit -m 'Record C# relay lobby build status' 2>$null
           if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
