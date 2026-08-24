@@ -1,6 +1,6 @@
 status=failure
-run_id=32734110821
-commit=fe4c69ebbdbcaf07aa16d3ca90c03ca4cfa94d67
+run_id=32734433453
+commit=35b18cabfe0e099c3bd3ffcf12f7f2eb54e81d53
 source_branch=csharp-v1
 tag=csharp-lobby-v1.0
-build=csharp-low-latency-lobby-v1
+build=csharp-low-latency-lobby-v2
