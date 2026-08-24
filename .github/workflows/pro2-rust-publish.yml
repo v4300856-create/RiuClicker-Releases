@@ -1,0 +1,124 @@
+name: Publish RiuClicker Pro 2.0 Rust Beta
+
+on:
+  push:
+    branches: [pro2-rust]
+    paths:
+      - '.build/pro2-rust.part*'
+      - '.github/workflows/pro2-rust-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-pro2-rust
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Rust Pro 2.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .build/pro2-rust.part00 .build/pro2-rust.part01 .build/pro2-rust.part02 .build/pro2-rust.part03 .build/pro2-rust.part04 > pro2-rust.tar.gz.b64
+          base64 -d pro2-rust.tar.gz.b64 > pro2-rust.tar.gz
+          echo 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc  pro2-rust.tar.gz' | sha256sum -c -
+          rm -rf pro2-rust
+          tar -xzf pro2-rust.tar.gz
+          test -f pro2-rust/src-tauri/src/main.rs
+          test -f pro2-rust/ui/index.html
+          grep -q 'RIUCLICKER PRO' pro2-rust/ui/index.html
+          grep -q 'triple_v_ordered' pro2-rust/src-tauri/src/main.rs
+          grep -q "'TAB'" pro2-rust/ui/app.js
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pro2-rust/src-tauri -> target
+
+      - name: Build native Rust executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
+          New-Item -ItemType Directory -Path out -Force | Out-Null
+          Copy-Item pro2-rust/src-tauri/target/release/riu-clicker-pro.exe out/RiuClicker-Pro-2.0-Rust-Beta.exe
+          if ((Get-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe).Length -lt 3000000) { throw 'EXE unexpectedly small' }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-2.0-Rust-Beta.zip -Force
+          Get-FileHash out/RiuClicker-Pro-2.0-Rust-Beta.exe -Algorithm SHA256 | Format-List
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-2.0-Rust-Beta
+          path: |
+            out/RiuClicker-Pro-2.0-Rust-Beta.exe
+            out/RiuClicker-Pro-2.0-Rust-Beta.zip
+          retention-days: 30
+
+      - name: Publish Pro 2.0 Rust beta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker Pro 2.0 Beta · Rust / Aether',
+            '',
+            'Complete Pro rewrite. Free RiuClicker is unchanged.',
+            '',
+            'Highlights:',
+            '- Native Rust Windows input core; no C# and no Python runtime',
+            '- Completely new Aether glass interface',
+            '- Animated startup RIUCLICKER PRO intro',
+            '- Hotkey button changes immediately to TAB/E/V/Mouse button after capture',
+            '- Two independent clickers with precise CPS scheduler',
+            '- Bolt Push and Bolts can both stay enabled',
+            '- Instant Bolt Push guarantees V V V completes before the second Shift',
+            '- Coordinates capture',
+            '- Wallhop camera flick + return',
+            '- Owner-hosted Squad Sync; only E/V are broadcast',
+            '- Photo and video backgrounds',
+            '- F12 emergency stop',
+            '',
+            'Squad Sync is direct owner-hosted networking. Internet connections can require router port forwarding when NAT blocks incoming connections.'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-Pro-2.0-Rust-Beta.exe','out/RiuClicker-Pro-2.0-Rust-Beta.zip')
+          gh release view pro-v2.0-rust-beta --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload pro-v2.0-rust-beta $assets --clobber
+            gh release edit pro-v2.0-rust-beta --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --prerelease
+          } else {
+            gh release create pro-v2.0-rust-beta $assets --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --target '${{ github.sha }}' --prerelease
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release publish failed' }
+
+      - name: Record status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=pro-v2.0-rust-beta',
+            'engine=rust-tauri-aether'
+          ) | Set-Content pro2-rust-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pro2-rust-status.txt
+          git commit -m 'Record Rust Pro 2.0 build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push origin HEAD:pro2-rust }
