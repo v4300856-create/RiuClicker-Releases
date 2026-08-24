@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.build/free-v10-cps-refresh.py'
+      - '.build/free-v10-compile-fix.py'
       - '.github/workflows/free-v10-refresh.yml'
   workflow_dispatch:
 
@@ -56,6 +57,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Pulse/reliable macro patch failed' }
           python .build/free-v10-cps-refresh.py
           if ($LASTEXITCODE -ne 0) { throw 'Free v1.0 CPS refresh failed' }
+          python .build/free-v10-compile-fix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free v1.0 compile fix failed' }
 
       - name: Validate refreshed Free v1.0
         shell: pwsh
