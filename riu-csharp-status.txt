@@ -1,0 +1,6 @@
+status=success
+run_id=32738227324
+commit=6e1e755ea487b0bbc9cbdc31b20abbb9a2003d2d
+source_branch=csharp-v1
+tag=riu-csharp-v1.0
+build=csharp-product-v1
