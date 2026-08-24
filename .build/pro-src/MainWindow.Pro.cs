@@ -117,6 +117,23 @@ public partial class MainWindow
         }
     }
 
+    private async Task TapTripleVOrdered(ProTiming t, bool beforeShift)
+    {
+        // Never let the next Shift overtake the third V on very fast modes.
+        // Explicit down/up pairs + a tiny barrier keep the game-facing order V,V,V -> Shift.
+        var hold = Math.Max(2, t.KeyHold);
+        var gap = Math.Max(2, t.StepGap);
+        for (var i = 0; i < 3; i++)
+        {
+            InputService.KeyDown("V");
+            await Delay(hold);
+            InputService.KeyUp("V");
+            if (i < 2) await Delay(gap);
+        }
+        InputService.KeyUp("V");
+        if (beforeShift) await Delay(Math.Max(8, t.StepGap));
+    }
+
     private async Task RunProActionAsync(string action)
     {
         if (action == "boltpush")
@@ -138,22 +155,27 @@ public partial class MainWindow
                 await Delay(t.MouseGap);
                 InputService.TapKey("SHIFT", t.ModifierHold, CancellationToken.None);
                 await Delay(t.StepGap);
-                for (var i = 0; i < 3; i++)
-                {
-                    InputService.TapKey("V", t.KeyHold, CancellationToken.None);
-                    if (i < 2) await Delay(t.StepGap);
-                }
-                await Delay(t.StepGap);
+
+                // Critical order: all three V taps are fully completed BEFORE the second Shift.
+                await TapTripleVOrdered(t, beforeShift: true);
+
                 InputService.TapKey("SHIFT", t.ModifierHold, CancellationToken.None);
-                // Instant still forces a real SHIFT-UP and a tiny safety gap before the coordinate click.
+                InputService.KeyUp("V");
                 InputService.KeyUp("SHIFT");
+                // Instant still forces a real SHIFT-UP and a tiny safety gap before the coordinate click.
                 await Delay(Math.Max(8, t.FinalSafety));
                 InputService.SetCursor(x, y);
                 await Delay(Math.Max(1, t.PointerSettle));
                 InputService.MouseClick("left");
                 Log($"Bolt Push · {s.SpeedMode.ToUpperInvariant()} · {x}, {y}");
             }
-            finally { _boltPushRun.Release(); RefreshProUi(); }
+            finally
+            {
+                InputService.KeyUp("V");
+                InputService.KeyUp("SHIFT");
+                _boltPushRun.Release();
+                RefreshProUi();
+            }
         }
         else if (action == "bolts")
         {
@@ -163,14 +185,15 @@ public partial class MainWindow
             {
                 var t = ProTiming.For(s.SpeedMode);
                 BoltsState.Text = "● RUNNING";
-                for (var i = 0; i < 3; i++)
-                {
-                    InputService.TapKey("V", t.KeyHold, CancellationToken.None);
-                    if (i < 2) await Delay(t.StepGap);
-                }
+                await TapTripleVOrdered(t, beforeShift: false);
                 Log($"Bolts · {s.SpeedMode.ToUpperInvariant()}");
             }
-            finally { _boltsRun.Release(); RefreshProUi(); }
+            finally
+            {
+                InputService.KeyUp("V");
+                _boltsRun.Release();
+                RefreshProUi();
+            }
         }
     }
 
