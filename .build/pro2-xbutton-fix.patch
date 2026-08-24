@@ -1,0 +1,13 @@
+--- a/pro2-rust/src-tauri/src/main.rs
++++ b/pro2-rust/src-tauri/src/main.rs
+@@ -332,8 +332,8 @@
+                 "left" => { mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0); }
+                 "right" => { mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0); }
+                 "middle" => { mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0); mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0); }
+-                "x1" => { mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1 as u32, 0); mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1 as u32, 0); }
+-                "x2" => { mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2 as u32, 0); mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2 as u32, 0); }
++                "x1" => { mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON1 as i32, 0); mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON1 as i32, 0); }
++                "x2" => { mouse_event(MOUSEEVENTF_XDOWN, 0, 0, XBUTTON2 as i32, 0); mouse_event(MOUSEEVENTF_XUP, 0, 0, XBUTTON2 as i32, 0); }
+                 _ => {}
+             }
+         }
