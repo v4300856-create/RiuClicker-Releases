@@ -1,0 +1,137 @@
+name: Publish Free RiuClicker Fixed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/free-fixed-publish.yml'
+      - '.build/free-v10-fixed-label.py'
+      - '.build/free-v10-cps-hotfix.py'
+      - '.build/free-v11-hotfix.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-free-riuclicker-fixed
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Apply base and Free patches
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+          python .build/free-riuclicker.py
+          python .build/free-v11-hotfix.py
+          python .build/free-v10-cps-hotfix.py
+          python .build/free-v10-fixed-label.py
+
+      - name: Validate Fixed edition
+        shell: pwsh
+        run: |
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.0</Version>' -SimpleMatch)) { throw 'Version must remain 1.0.0' }
+          if (-not (Select-String -Path 'src/InputService.cs' -Pattern 'MouseClickHeld' -SimpleMatch)) { throw 'Reliable macro click helper missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'MouseClickHeld' -SimpleMatch)) { throw 'Fast macro click fix missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'HighResolutionTimer' -SimpleMatch)) { throw 'High CPS timer missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'WaitUntil(nextTick, token)' -SimpleMatch)) { throw 'Precise CPS scheduler missing' }
+          if (-not (Select-String -Path 'src/BrandVisual.cs' -Pattern 'PULSE UI  •  FIXED' -SimpleMatch)) { throw 'Fixed branding missing' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="turbo"' -SimpleMatch) { throw 'Turbo still visible' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="instant"' -SimpleMatch) { throw 'Instant still visible' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Free RiuClicker Fixed
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=FreeRiuClickerFixed `
+            -p:ApplicationIcon=app.ico `
+            -o out/free
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          Copy-Item out/free/FreeRiuClickerFixed.exe out/Free-RiuClicker-1.0-Fixed.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'out/Free-RiuClicker-1.0-Fixed.exe')) { throw 'EXE missing' }
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/Free-RiuClicker-1.0-Fixed.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/Free-RiuClicker-1.0-Fixed.zip -Force
+          (Get-FileHash out/Free-RiuClicker-1.0-Fixed.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/Free-RiuClicker-1.0-Fixed.sha256.txt
+
+      - name: Publish separate Fixed release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# Free RiuClicker 1.0 · Fixed',
+            '',
+            'Separate fixed build. The original free-v1.0 release remains available.',
+            '',
+            'Fixes:',
+            '- High CPS scheduler rewritten for accurate high rates up to the configured 500 CPS range',
+            '- Fast macro mouse clicks use a real held click instead of an instant down/up',
+            '- Final coordinate click gets a short post-click settle so it is not lost',
+            '- Pulse UI polish',
+            '',
+            'Version stays 1.0.'
+          ) | Set-Content release-notes.md
+          $assets = @('out/Free-RiuClicker-1.0-Fixed.exe','out/Free-RiuClicker-1.0-Fixed.zip','out/Free-RiuClicker-1.0-Fixed.sha256.txt')
+          gh release view free-v1.0-fixed --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload free-v1.0-fixed $assets --clobber
+            gh release edit free-v1.0-fixed --title 'Free RiuClicker 1.0 · Fixed' --notes-file release-notes.md --latest
+          } else {
+            gh release create free-v1.0-fixed $assets --title 'Free RiuClicker 1.0 · Fixed' --notes-file release-notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish fixed release' }
+
+      - name: Record status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=free-v1.0-fixed',
+            'build=free-v1.0-fixed-cps-and-final-click'
+          ) | Set-Content publish-free-fixed-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add publish-free-fixed-status.txt
+          git commit -m 'Record Free Fixed publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
