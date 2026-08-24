@@ -1,4 +1,4 @@
-# republish-trigger
+# free-1.1-pulse
 name: Publish Free RiuClicker
 
 on:
@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.build/free-publish-trigger.txt'
+      - '.build/free-v11-hotfix.py'
       - '.github/workflows/free-publish.yml'
   workflow_dispatch:
 
@@ -53,12 +54,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw '5.22 UI/video patch failed' }
           python .build/free-riuclicker.py
           if ($LASTEXITCODE -ne 0) { throw 'Free edition patch failed' }
+          python .build/free-v11-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free 1.1 reliability/UI patch failed' }
 
-      - name: Validate Free edition
+      - name: Validate Free 1.1 edition
         shell: pwsh
         run: |
-          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.0</Version>' -SimpleMatch)) { throw 'Free 1.0 version missing' }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.1.0</Version>' -SimpleMatch)) { throw 'Free 1.1 version missing' }
           if (-not (Select-String -Path 'src/Models.cs' -Pattern 'Free RiuClicker' -SimpleMatch)) { throw 'Free branding missing' }
+          if (-not (Select-String -Path 'src/InputService.cs' -Pattern 'MouseClickHeld' -SimpleMatch)) { throw 'Reliable macro click helper missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'MouseClickHeld' -SimpleMatch)) { throw 'Macro engine reliable click patch missing' }
+          if (-not (Select-String -Path 'src/BrandVisual.cs' -Pattern 'PULSE UI' -SimpleMatch)) { throw 'Pulse UI branding missing' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="turbo"' -SimpleMatch) { throw 'Turbo macro mode still visible' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="instant"' -SimpleMatch) { throw 'Instant macro mode still visible' }
           if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Content="↗   Wallhop"' -SimpleMatch) { throw 'Wallhop navigation still visible' }
@@ -67,7 +73,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build Free RiuClicker
+      - name: Build Free RiuClicker 1.1
         shell: pwsh
         run: |
           dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
@@ -88,16 +94,23 @@ jobs:
           Copy-Item out/Free-RiuClicker.exe package/
           Compress-Archive -Path package/* -DestinationPath out/Free-RiuClicker.zip -Force
 
-      - name: Publish Free release
+      - name: Publish Free 1.1 release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            '# Free RiuClicker 1.0',
+            '# Free RiuClicker 1.1 · Pulse',
             '',
             'Free English-only edition.',
+            '',
+            'What is new:',
+            '- Reliable macro mouse clicks on Fast mode',
+            '- Final coordinate click now uses a real 10-14 ms press instead of instant down/up',
+            '- Small post-click settle so the last click is not lost',
+            '- New Pulse UI with violet/cyan accents and cleaner cards',
+            '- Updated Free 1.1 branding',
             '',
             'Included:',
             '- Auto Clicker',
@@ -107,30 +120,25 @@ jobs:
             '- Photo and video backgrounds',
             '- Precise CPS timing',
             '',
-            'Removed:',
-            '- Wallhop',
-            '- Turbo macro mode',
-            '- Instant macro mode',
-            '- Strawberry Clicker',
-            '- Additional interface languages'
+            'Free edition does not include Wallhop, Turbo/Instant modes, Strawberry Clicker, or extra languages.'
           ) | Set-Content release-notes.md
           $assets = @('out/Free-RiuClicker.exe','out/Free-RiuClicker.zip','out/Free-RiuClicker-Source.zip')
-          gh release view free-v1.0 --json tagName *> $null
+          gh release view free-v1.1 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload free-v1.0 $assets --clobber
-            gh release edit free-v1.0 --title 'Free RiuClicker 1.0' --notes-file release-notes.md --latest
+            gh release upload free-v1.1 $assets --clobber
+            gh release edit free-v1.1 --title 'Free RiuClicker 1.1 · Pulse' --notes-file release-notes.md --latest
           } else {
-            gh release create free-v1.0 $assets --title 'Free RiuClicker 1.0' --notes-file release-notes.md --target main --latest
+            gh release create free-v1.1 $assets --title 'Free RiuClicker 1.1 · Pulse' --notes-file release-notes.md --target main --latest
           }
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Free RiuClicker release' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Free RiuClicker 1.1 release' }
 
       - name: Verify public Free release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $release = gh release view free-v1.0 --json tagName,name,url,assets | ConvertFrom-Json
-          if ($release.tagName -ne 'free-v1.0') { throw 'Wrong tag' }
+          $release = gh release view free-v1.1 --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'free-v1.1') { throw 'Wrong tag' }
           $names = @($release.assets | ForEach-Object { $_.name })
           foreach ($name in @('Free-RiuClicker.exe','Free-RiuClicker.zip','Free-RiuClicker-Source.zip')) {
             if ($name -notin $names) { throw "$name missing" }
@@ -145,11 +153,12 @@ jobs:
             "status=${{ job.status }}",
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
-            'tag=free-v1.0',
+            'tag=free-v1.1',
+            'build=free-1.1-pulse-reliable-clicks',
             'publisher=dedicated'
           ) | Set-Content publish-free-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add publish-free-status.txt
-          git commit -m 'Record Free RiuClicker publish status' 2>$null
-          if ($LASTEXITCODE -eq 0) { git push }
+          git commit -m 'Record Free RiuClicker 1.1 publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
