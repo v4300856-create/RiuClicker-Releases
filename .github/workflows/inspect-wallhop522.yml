@@ -1,0 +1,35 @@
+name: Inspect 5.22 Wallhop
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-wallhop522.yml']
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download 5.22 source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v5.22 -p 'RiuClicker-5.22-Source.zip' -D /tmp/riu522
+          unzip -q /tmp/riu522/RiuClicker-5.22-Source.zip -d /tmp/src522
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/src522/MainWindow.Extras.cs')
+          s=p.read_text(encoding='utf-8')
+          a=s.find('private void StartWallhop()')
+          if a<0: raise SystemExit('StartWallhop not found')
+          b=s.find('// ---------------- Profiles', a)
+          if b<0: b=min(len(s),a+10000)
+          Path('.build/wallhop522-reference.txt').write_text('SOURCE: RiuClicker 5.22\n\n'+s[a:b],encoding='utf-8')
+          PY
+      - name: Commit reference
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .build/wallhop522-reference.txt
+          git commit -m 'Capture 5.22 wallhop reference' || exit 0
+          git push
