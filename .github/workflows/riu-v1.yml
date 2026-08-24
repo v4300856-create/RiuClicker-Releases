@@ -133,7 +133,7 @@ jobs:
           $inner = New-Object System.Drawing.RectangleF 22,22,212,212
           $dark = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(235,12,15,27))
           $g.FillRectangle($dark,$inner)
-          $font = New-Object System.Drawing.Font 'Segoe UI Black',142,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel
+          $font = [System.Drawing.Font]::new('Segoe UI Black',142,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
           $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
           $text = 'R'
           $measure = $g.MeasureString($text,$font)
