@@ -1,0 +1,127 @@
+name: Build RiuClicker Pro 2.0 Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/pro2-rust-main-trigger.txt'
+      - '.github/workflows/pro2-rust-main-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: riuclicker-pro2-rust-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Rust Pro source bundle from pro2-rust branch
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item pro2-rust.tar.gz.b64 -ErrorAction SilentlyContinue
+          foreach ($part in @('00','01','02','03','04')) {
+            gh api -H 'Accept: application/vnd.github.raw' "/repos/${{ github.repository }}/contents/.build/pro2-rust.part$part?ref=pro2-rust" | Add-Content -NoNewline pro2-rust.tar.gz.b64
+            if ($LASTEXITCODE -ne 0) { throw "Could not fetch source part $part" }
+          }
+          $bytes = [Convert]::FromBase64String((Get-Content pro2-rust.tar.gz.b64 -Raw))
+          [IO.File]::WriteAllBytes((Join-Path $PWD 'pro2-rust.tar.gz'), $bytes)
+          $hash = (Get-FileHash pro2-rust.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc') { throw "Source bundle hash mismatch: $hash" }
+          tar -xzf pro2-rust.tar.gz
+          if ($LASTEXITCODE -ne 0) { throw 'Could not extract Rust source bundle' }
+          if (-not (Test-Path 'pro2-rust/src-tauri/src/main.rs')) { throw 'Rust main.rs missing' }
+          if (-not (Select-String 'pro2-rust/ui/index.html' -Pattern 'RIUCLICKER PRO' -SimpleMatch)) { throw 'Aether intro missing' }
+          if (-not (Select-String 'pro2-rust/src-tauri/src/main.rs' -Pattern 'triple_v_ordered' -SimpleMatch)) { throw 'VVV ordering core missing' }
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pro2-rust/src-tauri -> target
+
+      - name: Compile Rust / Tauri executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
+          New-Item -ItemType Directory -Path out -Force | Out-Null
+          Copy-Item pro2-rust/src-tauri/target/release/riu-clicker-pro.exe out/RiuClicker-Pro-2.0-Rust-Beta.exe
+          $size = (Get-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe).Length
+          if ($size -lt 3000000) { throw "EXE unexpectedly small: $size" }
+
+      - name: Package and hash
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-2.0-Rust-Beta.zip -Force
+          (Get-FileHash out/RiuClicker-Pro-2.0-Rust-Beta.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-2.0-Rust-Beta
+          path: |
+            out/RiuClicker-Pro-2.0-Rust-Beta.exe
+            out/RiuClicker-Pro-2.0-Rust-Beta.zip
+            out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt
+          retention-days: 30
+
+      - name: Publish Rust beta release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker Pro 2.0 Beta · Rust Aether',
+            '',
+            'Complete rewrite. Free RiuClicker is unchanged.',
+            '',
+            '- Rust native Windows input core; no C# and no Python runtime',
+            '- Completely new Aether interface and animated RIUCLICKER PRO startup intro',
+            '- Hotkey button changes instantly after TAB/E/V/F-key/Mouse key capture',
+            '- Two independent precise-CPS clickers',
+            '- Bolt Push + Bolts can both stay armed',
+            '- Instant mode enforces V V V before the second Shift',
+            '- Coordinates, Wallhop, photo/video backgrounds, F12 stop',
+            '- Owner-hosted Squad Sync with only E/V remote triggers',
+            '',
+            'Squad Sync is direct P2P. Internet hosting can require router port forwarding when NAT blocks incoming connections.'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-Pro-2.0-Rust-Beta.exe','out/RiuClicker-Pro-2.0-Rust-Beta.zip','out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt')
+          gh release view pro-v2.0-rust-beta --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload pro-v2.0-rust-beta $assets --clobber
+            gh release edit pro-v2.0-rust-beta --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --prerelease
+          } else {
+            gh release create pro-v2.0-rust-beta $assets --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --target main --prerelease
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Rust Pro release' }
+
+      - name: Record Rust build status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=pro-v2.0-rust-beta',
+            'engine=rust-tauri-aether'
+          ) | Set-Content pro2-rust-main-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pro2-rust-main-status.txt
+          git commit -m 'Record Rust Pro 2.0 build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
