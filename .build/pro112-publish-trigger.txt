@@ -1,0 +1,1 @@
+build pro-v1.1.2-beta instant-hotkey-label
