@@ -1,0 +1,6 @@
+status=failure
+run_id=32709411161
+commit=c1c945cb2d62c8518776c8bed9f8fd3df651f321
+tag=pro-v2.0-beta
+build=winapi-import-fix
+engine=rust-aether
