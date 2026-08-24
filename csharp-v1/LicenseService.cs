@@ -1,4 +1,4 @@
-using System.Management;
+using Microsoft.Win32;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -16,7 +16,7 @@ public sealed class LicenseResult
 
 public static class LicenseService
 {
-    // After Firebase deploy, replace this with your HTTPS Function URL.
+    // Replace after Firebase deploy.
     // Example: https://europe-west1-YOUR_PROJECT.cloudfunctions.net/licenseApi
     public const string Endpoint = "https://europe-west1-YOUR_PROJECT.cloudfunctions.net/licenseApi";
 
@@ -27,25 +27,21 @@ public static class LicenseService
 
     public static string DeviceId()
     {
-        var parts = new List<string>
-        {
-            Environment.MachineName,
-            Environment.ProcessorCount.ToString(),
-            Environment.OSVersion.VersionString
-        };
-
+        var machineGuid = "";
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT UUID FROM Win32_ComputerSystemProduct");
-            foreach (ManagementObject item in searcher.Get())
-            {
-                var uuid = item["UUID"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(uuid)) parts.Add(uuid);
-            }
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Cryptography");
+            machineGuid = key?.GetValue("MachineGuid")?.ToString() ?? "";
         }
         catch { }
 
-        var raw = string.Join("|", parts);
+        var raw = string.Join("|", new[]
+        {
+            machineGuid,
+            Environment.MachineName,
+            Environment.ProcessorCount.ToString(),
+            Environment.OSVersion.VersionString
+        });
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return Convert.ToHexString(hash)[..24];
     }
@@ -72,11 +68,11 @@ public static class LicenseService
         try { if (File.Exists(LicenseFile)) File.Delete(LicenseFile); } catch { }
     }
 
-    public static async Task<LicenseResult> ActivateAsync(string key, CancellationToken ct = default)
-        => await SendAsync("activate", key, ct);
+    public static Task<LicenseResult> ActivateAsync(string key, CancellationToken ct = default)
+        => SendAsync("activate", key, ct);
 
-    public static async Task<LicenseResult> ValidateAsync(string key, CancellationToken ct = default)
-        => await SendAsync("validate", key, ct);
+    public static Task<LicenseResult> ValidateAsync(string key, CancellationToken ct = default)
+        => SendAsync("validate", key, ct);
 
     private static async Task<LicenseResult> SendAsync(string action, string key, CancellationToken ct)
     {
