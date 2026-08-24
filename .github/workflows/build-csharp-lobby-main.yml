@@ -1,0 +1,110 @@
+name: Build CSharp Lobby From Branch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-csharp-lobby-main.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout C# source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin csharp-v1
+          git worktree add source origin/csharp-v1
+          test -f source/csharp-v1/RiuClicker.csproj
+          test -f source/csharp-v1/LobbyService.cs
+          test -f source/csharp-v1/MainWindow.xaml
+          test -f source/csharp-v1/MainWindow.xaml.cs
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore source/csharp-v1/RiuClicker.csproj
+
+      - name: Build and publish
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish source/csharp-v1/RiuClicker.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out
+          if ($LASTEXITCODE -ne 0) { throw 'C# publish failed' }
+          if (-not (Test-Path out/RiuClicker.exe)) { throw 'RiuClicker.exe missing' }
+          Copy-Item out/RiuClicker.exe out/RiuClicker-CSharp-Lobby-1.0.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-CSharp-Lobby-1.0.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-CSharp-Lobby-1.0.zip -Force
+          (Get-FileHash out/RiuClicker-CSharp-Lobby-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-CSharp-Lobby-1.0.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-CSharp-Lobby-1.0
+          path: |
+            out/RiuClicker-CSharp-Lobby-1.0.exe
+            out/RiuClicker-CSharp-Lobby-1.0.zip
+            out/RiuClicker-CSharp-Lobby-1.0.sha256.txt
+          retention-days: 30
+
+      - name: Publish test release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker C# Lobby 1.0',
+            '',
+            '- C# / WPF lobby-first build',
+            '- Persistent TCP with TCP_NODELAY',
+            '- Live player list updates on join and leave',
+            '- Real RTT ping display for members',
+            '- 500 ms heartbeat + TCP keepalive',
+            '- UPnP port mapping attempt on owner PC',
+            '- Instant test signal for sync testing'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-CSharp-Lobby-1.0.exe','out/RiuClicker-CSharp-Lobby-1.0.zip','out/RiuClicker-CSharp-Lobby-1.0.sha256.txt')
+          gh release view csharp-lobby-v1.0 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload csharp-lobby-v1.0 $assets --clobber
+            gh release edit csharp-lobby-v1.0 --title 'RiuClicker C# Lobby 1.0' --notes-file notes.md --prerelease
+          } else {
+            gh release create csharp-lobby-v1.0 $assets --title 'RiuClicker C# Lobby 1.0' --notes-file notes.md --target csharp-v1 --prerelease
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish C# lobby release' }
+
+      - name: Record build status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'source_branch=csharp-v1',
+            'tag=csharp-lobby-v1.0',
+            'build=csharp-low-latency-lobby-v1'
+          ) | Set-Content csharp-lobby-main-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add csharp-lobby-main-status.txt
+          git commit -m 'Record C# lobby main build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
