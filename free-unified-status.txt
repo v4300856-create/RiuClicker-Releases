@@ -1,0 +1,5 @@
+status=failure
+run_id=32754982908
+commit=36be245a7af899cbcbcefb536328fbf727513067
+tag=free-riuclicker
+build=free-unified-1.0-and-1.1-cps-fastfix
