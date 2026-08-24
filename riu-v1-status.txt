@@ -1,6 +1,6 @@
-status=failure
-run_id=32724802732
-commit=636e5533ecc9a5a5309a1bfe34d8a6e3d570bb56
+status=success
+run_id=32724926461
+commit=b624d001f4c3653e157f1ab614dde44c14129e06
 tag=riu-v1.0
 build=clean-v1-core
 engine=rust-aether
