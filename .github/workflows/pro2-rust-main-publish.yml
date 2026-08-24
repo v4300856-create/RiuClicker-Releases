@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.build/pro2-rust-main-trigger.txt'
+      - '.build/pro2-v20.patch.gz.b64'
       - '.github/workflows/pro2-rust-main-publish.yml'
   workflow_dispatch:
 
@@ -40,14 +41,31 @@ jobs:
           tar -xzf pro2-rust.tar.gz
           test -f pro2-rust/src-tauri/src/main.rs
           test -f pro2-rust/ui/index.html
-          grep -q 'RIUCLICKER PRO' pro2-rust/ui/index.html
-          grep -q 'triple_v_ordered' pro2-rust/src-tauri/src/main.rs
-          grep -q "'TAB'" pro2-rust/ui/app.js
+          test -f pro2-rust/ui/app.js
 
-      - name: Export source snapshot
+      - name: Apply Pro 2.0 Macro Lobby patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d < .build/pro2-v20.patch.gz.b64 | gzip -dc > pro2-v20.patch
+          git apply --check pro2-v20.patch
+          git apply pro2-v20.patch
+          grep -Fq 'macro_input_lock' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'run_lobby_binding' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'TRIGGER {command}' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'e_action' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'lobby_member_names' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'Macro Lobby' pro2-rust/ui/index.html
+          grep -Fq 'lobby-e-action' pro2-rust/ui/index.html
+          grep -Fq 'lobby-v-action' pro2-rust/ui/index.html
+          grep -Fq 'features = ["protocol-asset"]' pro2-rust/src-tauri/Cargo.toml
+          grep -Fq 'RiuClicker Pro 2.0' pro2-rust/src-tauri/tauri.conf.json
+          node --check pro2-rust/ui/app.js
+
+      - name: Export patched source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: RiuClicker-Pro-2.0-Source-Snapshot
+          name: RiuClicker-Pro-2.0-Patched-Source
           path: pro2-rust/**
           retention-days: 7
 
@@ -61,10 +79,6 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Push-Location pro2-rust/src-tauri
-          cargo add tauri --features protocol-asset
-          if ($LASTEXITCODE -ne 0) { throw 'Could not enable Tauri protocol-asset feature' }
-          Pop-Location
           cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
           New-Item -ItemType Directory -Path out -Force | Out-Null
@@ -78,6 +92,7 @@ jobs:
           New-Item -ItemType Directory -Path package -Force | Out-Null
           Copy-Item out/RiuClicker-Pro-2.0-Beta.exe package/
           Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-2.0-Beta.zip -Force
+          Compress-Archive -Path pro2-rust/* -DestinationPath out/RiuClicker-Pro-2.0-Beta-Source.zip -Force
           (Get-FileHash out/RiuClicker-Pro-2.0-Beta.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro-2.0-Beta.sha256.txt
 
       - uses: actions/upload-artifact@v4
@@ -86,6 +101,7 @@ jobs:
           path: |
             out/RiuClicker-Pro-2.0-Beta.exe
             out/RiuClicker-Pro-2.0-Beta.zip
+            out/RiuClicker-Pro-2.0-Beta-Source.zip
             out/RiuClicker-Pro-2.0-Beta.sha256.txt
           retention-days: 30
 
@@ -98,17 +114,29 @@ jobs:
           @(
             '# RiuClicker Pro 2.0 Beta',
             '',
-            'Complete rewrite. Free RiuClicker is unchanged.',
+            'Complete Pro rewrite. Free RiuClicker is unchanged.',
             '',
-            '- New Aether interface and animated RIUCLICKER PRO intro',
-            '- Native Rust Windows input core; no C# and no Python runtime',
-            '- Hotkey buttons update instantly after capture',
-            '- Two independent clickers and two macro actions can stay armed together',
-            '- Bolt Push enforces V V V before the second Shift',
-            '- Coordinates, Wallhop, backgrounds and F12 stop',
-            '- Macro Lobby / Squad Sync uses explicit join and only E/V trigger messages'
+            '- Product name restored to RiuClicker Pro 2.0',
+            '- New Aether interface and animated RIUCLICKER PRO startup intro',
+            '- Hotkey buttons update immediately after TAB / E / V / F-key / mouse capture',
+            '- Bolt Push and Bolts can both stay armed',
+            '- Macro input is serialized so the two macro sequences cannot corrupt each other',
+            '- Instant mode keeps real key edges and guarantees V V V before the second Shift',
+            '- Physical macro hotkeys are released before injected V V V starts',
+            '- Macro Lobby: owner creates a room, members explicitly join and appear by name',
+            '- Owner physical E/V are the only shared trigger messages',
+            '- Every PC maps lobby E and V to its own local Bolt Push / Bolts / None action',
+            '- No arbitrary remote keyboard, shell, file or remote-control commands',
+            '- Coordinates, Wallhop, photo/video backgrounds, two clickers and F12 stop retained',
+            '',
+            'Macro Lobby is direct owner-hosted TCP. Internet connections may require router port forwarding when NAT/CGNAT blocks incoming traffic.'
           ) | Set-Content notes.md
-          $assets = @('out/RiuClicker-Pro-2.0-Beta.exe','out/RiuClicker-Pro-2.0-Beta.zip','out/RiuClicker-Pro-2.0-Beta.sha256.txt')
+          $assets = @(
+            'out/RiuClicker-Pro-2.0-Beta.exe',
+            'out/RiuClicker-Pro-2.0-Beta.zip',
+            'out/RiuClicker-Pro-2.0-Beta-Source.zip',
+            'out/RiuClicker-Pro-2.0-Beta.sha256.txt'
+          )
           gh release view pro-v2.0-beta --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload pro-v2.0-beta $assets --clobber
@@ -127,6 +155,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
+            'build=macro-lobby-reliable-macros',
             'engine=rust-aether'
           ) | Set-Content pro2-rust-main-status.txt
           git config user.name 'github-actions[bot]'
