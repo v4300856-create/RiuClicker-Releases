@@ -101,7 +101,7 @@ jobs:
             "commit=${{ github.sha }}",
             'source_branch=csharp-v1',
             'tag=csharp-lobby-v1.0',
-            'build=csharp-low-latency-lobby-v1'
+            'build=csharp-low-latency-lobby-v2'
           ) | Set-Content csharp-lobby-main-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
