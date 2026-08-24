@@ -1,4 +1,4 @@
-# build-trigger: 2026-08-25 high-cps-refresh
+# build-trigger: 2026-08-25 high-cps-refresh-v2
 from pathlib import Path
 
 root = Path('src')
@@ -47,15 +47,26 @@ elif 'timeEndPeriod(1);' not in s:
     raise SystemExit('Loop timer cleanup target missing')
 save(p, s)
 
+# Show generated CPS in the UI so the user can verify the engine directly.
 p, s = rw('MainWindow.xaml.cs')
-old_stats = 'stats.Text = $"{engine.ClickCount:N0} {T("кликов")} · {elapsed:mm\\:ss}";'
-new_stats = '''var actualCps = elapsed.TotalSeconds >= 0.25 ? engine.ClickCount / elapsed.TotalSeconds : 0;\n        stats.Text = $"{engine.ClickCount:N0} clicks · {elapsed:mm\\:ss} · {actualCps:0} CPS actual";'''
-if old_stats in s:
-    s = s.replace(old_stats, new_stats, 1)
-elif 'CPS actual' not in s:
-    raise SystemExit('runtime stats target missing')
+if 'CPS actual' not in s:
+    lines = s.splitlines()
+    replaced = False
+    for i, line in enumerate(lines):
+        if 'stats.Text =' in line and 'engine.ClickCount' in line:
+            indent = line[:len(line) - len(line.lstrip())]
+            lines[i:i+1] = [
+                indent + 'var actualCps = elapsed.TotalSeconds >= 0.25 ? engine.ClickCount / elapsed.TotalSeconds : 0;',
+                indent + 'stats.Text = $"{engine.ClickCount:N0} clicks · {elapsed:mm\\:ss} · {actualCps:0} CPS actual";'
+            ]
+            replaced = True
+            break
+    if not replaced:
+        raise SystemExit('runtime stats target missing')
+    s = '\n'.join(lines) + ('\n' if s.endswith('\n') else '')
 save(p, s)
 
+# Add an obvious 500 CPS preset to both clickers.
 p, s = rw('MainWindow.xaml')
 s = s.replace('<UniformGrid Columns="5" Margin="0,6,0,0"><Button Content="5" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|5"/><Button Content="10" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|10"/><Button Content="20" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|20"/><Button Content="50" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|50"/><Button Content="100" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|100"/></UniformGrid>',
 '''<UniformGrid Columns="6" Margin="0,6,0,0"><Button Content="5" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|5"/><Button Content="10" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|10"/><Button Content="20" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|20"/><Button Content="50" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|50"/><Button Content="100" Style="{StaticResource RiuButton}" Margin="2" Click="QuickCps_Click" Tag="1|100"/><Button Content="500" Style="{StaticResource AccentButton}" Margin="2" Click="QuickCps_Click" Tag="1|500"/></UniformGrid>''')
