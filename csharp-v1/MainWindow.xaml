@@ -1,58 +1,344 @@
 <Window x:Class="RiuClicker.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RiuClicker 1.0 · C# Relay Lobby" Width="980" Height="700"
-        MinWidth="900" MinHeight="620" WindowStartupLocation="CenterScreen"
-        Background="{StaticResource Bg}">
-    <Grid Margin="24">
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock Text="RIUCLICKER · C#" Foreground="{StaticResource Accent2}" FontWeight="Bold" FontSize="12"/>
-                <TextBlock Text="RELAY LOBBY" Foreground="{StaticResource Text}" FontWeight="Black" FontSize="30" Margin="0,3,0,0"/>
-                <TextBlock Text="Cloudflare WebSocket relay · no ports · no UPnP" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,4,0,0"/>
-            </StackPanel>
-            <Border Grid.Column="1" Background="{StaticResource Panel2}" CornerRadius="12" Padding="16,10" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal"><Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="#64748B" Margin="0,0,9,0" VerticalAlignment="Center"/><TextBlock x:Name="RoleText" Text="OFFLINE" Foreground="{StaticResource Text}" FontWeight="Bold"/><TextBlock Text="  ·  " Foreground="{StaticResource Muted}"/><TextBlock x:Name="PingText" Text="PING —" Foreground="{StaticResource Accent2}" FontWeight="Bold"/></StackPanel>
-            </Border>
-        </Grid>
+        Title="RiuClicker 1.0" Width="1180" Height="760"
+        MinWidth="1040" MinHeight="680" WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanResize" Background="#080B12">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Card" Color="#D9151B28"/>
+        <SolidColorBrush x:Key="Card2" Color="#E51B2231"/>
+        <SolidColorBrush x:Key="Line" Color="#2A3447"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F5F7FF"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#8D98AD"/>
+        <SolidColorBrush x:Key="Purple" Color="#8B5CF6"/>
+        <SolidColorBrush x:Key="Cyan" Color="#22D3EE"/>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Card}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="18"/>
+        </Style>
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Margin" Value="0,3"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Padding" Value="14,9"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource Purple}"/>
+            <Setter Property="BorderBrush" Value="#A78BFA"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Padding" Value="13,8"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="#202839"/>
+            <Setter Property="BorderBrush" Value="#344159"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="#111722"/>
+            <Setter Property="BorderBrush" Value="#303B50"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,7"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Background" Value="#E8ECF5"/>
+            <Setter Property="Padding" Value="8,5"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        </Style>
+    </Window.Resources>
 
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="0.95*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid x:Name="RootGrid">
+        <MediaElement x:Name="BackgroundVideo" Stretch="UniformToFill" IsMuted="True" LoadedBehavior="Manual" UnloadedBehavior="Stop" Visibility="Collapsed"/>
+        <Image x:Name="BackgroundImage" Stretch="UniformToFill" Visibility="Collapsed"/>
+        <Rectangle Fill="#E8080B12"/>
 
-            <Border Grid.Column="0" Grid.Row="0" Background="{StaticResource Panel}" CornerRadius="18" Padding="20">
-                <StackPanel>
-                    <TextBlock Text="CREATE LOBBY" Foreground="{StaticResource Accent}" FontWeight="Black" FontSize="18"/>
-                    <TextBlock Text="Owner" Foreground="{StaticResource Muted}" Margin="0,2,0,13"/>
-                    <TextBlock Text="Your name" Foreground="{StaticResource Muted}"/><TextBox x:Name="NameBox" Text="Player"/>
-                    <TextBlock Text="Relay URL" Foreground="{StaticResource Muted}"/><TextBox x:Name="RelayUrlBox" Text="wss://riu-clicker-relay.YOUR-SUBDOMAIN.workers.dev/ws"/>
-                    <Button x:Name="HostButton" Content="CREATE LOBBY" Background="{StaticResource Accent}" Click="Host_Click" Margin="0,6,0,10"/>
-                    <TextBlock Text="Lobby code" Foreground="{StaticResource Muted}"/><TextBox x:Name="CodeBox" IsReadOnly="True" TextWrapping="Wrap" MinHeight="46"/><Button Content="COPY CODE" Click="CopyCode_Click"/>
-                    <TextBlock Text="No router setup. Both PCs connect only to the relay." TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,8,0,0" FontSize="11"/>
-                </StackPanel>
-            </Border>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="54"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="34"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="2" Grid.Row="0" Background="{StaticResource Panel}" CornerRadius="18" Padding="20">
-                <StackPanel>
-                    <TextBlock Text="JOIN LOBBY" Foreground="{StaticResource Accent2}" FontWeight="Black" FontSize="18"/>
-                    <TextBlock Text="Member" Foreground="{StaticResource Muted}" Margin="0,2,0,13"/>
-                    <TextBlock Text="Lobby code" Foreground="{StaticResource Muted}"/><TextBox x:Name="JoinCodeBox" TextWrapping="Wrap" MinHeight="46"/>
-                    <Button x:Name="JoinButton" Content="JOIN" Background="#0E7490" Click="Join_Click" Margin="0,6,0,4"/><Button Content="LEAVE LOBBY" Background="#3A1D2A" BorderBrush="#6B2A3C" Click="Leave_Click"/>
-                    <Separator Margin="0,10" Background="#293146"/><TextBlock Text="Latency test" Foreground="{StaticResource Muted}"/><Button Content="SEND INSTANT TEST SIGNAL" Click="TestSignal_Click"/>
-                    <TextBlock Text="Ping above is the real round-trip delay to the relay." TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="18" Padding="18">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="0.8*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.2*"/></Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <DockPanel Margin="0,0,0,10"><TextBlock Text="PLAYERS" Foreground="{StaticResource Text}" FontWeight="Black" FontSize="17"/><Border DockPanel.Dock="Right" Background="#20283A" CornerRadius="10" Padding="9,4"><TextBlock x:Name="MemberCountText" Text="0 ONLINE" Foreground="{StaticResource Accent2}" FontWeight="Bold" FontSize="11"/></Border></DockPanel>
-                        <ListBox x:Name="MembersList" Background="#0D111C" BorderBrush="#293146" Foreground="{StaticResource Text}" FontSize="15" Padding="8"/>
+            <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#F20B0F18" BorderBrush="#20293A" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Margin="18,0,8,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource Purple}" Margin="0,0,10,0">
+                            <TextBlock Text="R" Foreground="White" FontWeight="Black" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="RiuClicker" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Border Background="#182131" CornerRadius="7" Padding="8,3" Margin="10,0,0,0">
+                            <TextBlock Text="1.0" Foreground="{StaticResource Cyan}" FontSize="10" FontWeight="Bold"/>
+                        </Border>
                     </StackPanel>
-                    <StackPanel Grid.Column="2"><TextBlock Text="LIVE EVENTS" Foreground="{StaticResource Text}" FontWeight="Black" FontSize="17" Margin="0,0,0,10"/><ListBox x:Name="LogList" Background="#0D111C" BorderBrush="#293146" Foreground="{StaticResource Muted}" Padding="8"/><TextBlock x:Name="StatusText" Text="Ready" Foreground="{StaticResource Accent2}" Margin="2,9,0,0"/></StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="—" Width="44" Height="38" Background="Transparent" Foreground="#AAB4C8" BorderBrush="Transparent" Click="Minimize_Click"/>
+                        <Button Content="✕" Width="44" Height="38" Background="Transparent" Foreground="#FF8395" BorderBrush="Transparent" Click="Close_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1" Grid.Column="0" Background="#E70B1019" BorderBrush="#20293A" BorderThickness="0,0,1,0">
+                <Grid Margin="14,18,14,14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="NavCaption" Text="CONTROL CENTER" Foreground="#63708A" FontSize="10" FontWeight="Bold" Margin="12,0,0,10"/>
+                    <StackPanel Grid.Row="1">
+                        <Button x:Name="HomeNav" Tag="Home" Content="⌂   Главная" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                        <Button x:Name="ClickersNav" Tag="Clickers" Content="●   Кликеры" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                        <Button x:Name="MacrosNav" Tag="Macros" Content="⚡   Макросы" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                        <Button x:Name="CoordsNav" Tag="Coords" Content="⌖   Координаты" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                        <Button x:Name="WallhopNav" Tag="Wallhop" Content="↔   Wallhop" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                        <Button x:Name="SettingsNav" Tag="Settings" Content="⚙   Настройки" Style="{StaticResource NavButtonStyle}" Click="Nav_Click"/>
+                    </StackPanel>
+                    <Border Grid.Row="2" Background="#141B28" BorderBrush="#29344A" BorderThickness="1" CornerRadius="12" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="EMERGENCY STOP" Foreground="#FF7387" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="F12" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,2,0,1"/>
+                            <TextBlock x:Name="StopHint" Text="Остановить всё" Foreground="{StaticResource TextMuted}" FontSize="11"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Grid.Column="1" Margin="24,20,24,18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Grid x:Name="HomePage">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="HomeTitle" Text="Главная" Foreground="{StaticResource TextPrimary}" FontSize="30" FontWeight="Black"/>
+                                        <TextBlock x:Name="HomeSubtitle" Text="Быстрый контроль всех функций" Foreground="{StaticResource TextMuted}" Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Background="#122B25" BorderBrush="#1E594A" BorderThickness="1" CornerRadius="10" Padding="12,8" VerticalAlignment="Center">
+                                        <TextBlock x:Name="EngineBadge" Text="● ENGINE ONLINE" Foreground="#5EE6B1" FontSize="11" FontWeight="Bold"/>
+                                    </Border>
+                                </Grid>
+                                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="RIUCLICKER 1.0" Foreground="{StaticResource Cyan}" FontSize="11" FontWeight="Bold"/>
+                                            <TextBlock x:Name="HeroTitle" Text="Быстро. Чисто. Без лишнего." Foreground="White" FontSize="25" FontWeight="Black" Margin="0,6,0,4"/>
+                                            <TextBlock x:Name="HeroSubtitle" Text="Нативный C# / WPF движок, SendInput и сохранение настроек." Foreground="{StaticResource TextMuted}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="OpenMacrosButton" Content="Открыть макросы" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Click="OpenMacros_Click"/>
+                                    </Grid>
+                                </Border>
+                                <UniformGrid Columns="2">
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,0,8,8">
+                                        <StackPanel><TextBlock Text="CLICKER 1" Foreground="#7D8AA3" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="HomeClicker1" Text="F8 · 12 CPS" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,7,0,4"/><TextBlock x:Name="HomeClicker1State" Text="OFF" Foreground="#FF768B" FontWeight="Bold"/></StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource CardStyle}" Margin="8,0,0,8">
+                                        <StackPanel><TextBlock Text="CLICKER 2" Foreground="#7D8AA3" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="HomeClicker2" Text="F7 · 18 CPS" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,7,0,4"/><TextBlock x:Name="HomeClicker2State" Text="OFF" Foreground="#FF768B" FontWeight="Bold"/></StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,8,8,0">
+                                        <StackPanel><TextBlock Text="BOLT PUSH" Foreground="#7D8AA3" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="HomeBoltPush" Text="E · V V V → SHIFT" Foreground="White" FontSize="18" FontWeight="Bold" Margin="0,7,0,4"/><TextBlock x:Name="HomeBoltPushState" Text="READY" Foreground="#61E7B2" FontWeight="Bold"/></StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource CardStyle}" Margin="8,8,0,0">
+                                        <StackPanel><TextBlock Text="WALLHOP" Foreground="#7D8AA3" FontSize="10" FontWeight="Bold"/><TextBlock x:Name="HomeWallhop" Text="Z LEFT · X RIGHT" Foreground="White" FontSize="18" FontWeight="Bold" Margin="0,7,0,4"/><TextBlock Text="5.22 STYLE" Foreground="{StaticResource Cyan}" FontWeight="Bold"/></StackPanel>
+                                    </Border>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="ClickersPage" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="ClickersTitle" Text="Кликеры" Foreground="White" FontSize="30" FontWeight="Black"/>
+                                <TextBlock x:Name="ClickersSubtitle" Text="Два независимых кликера с отдельными хоткеями" Foreground="{StaticResource TextMuted}" Margin="0,5,0,18"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="CLICKER 1" Foreground="{StaticResource Purple}" FontWeight="Black" FontSize="18"/>
+                                            <TextBlock x:Name="C1HotkeyLabel" Text="Хоткей" Foreground="{StaticResource TextMuted}" Margin="0,16,0,5"/>
+                                            <Button x:Name="Clicker1HotkeyButton" Content="F8" Style="{StaticResource SecondaryButton}" Click="HotkeyButton_Click" Tag="clicker1"/>
+                                            <TextBlock x:Name="C1CpsLabel" Text="Скорость · 12 CPS" Foreground="{StaticResource TextMuted}" Margin="0,14,0,4"/>
+                                            <Slider x:Name="Clicker1CpsSlider" Minimum="1" Maximum="60" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="ClickerCps_ValueChanged"/>
+                                            <TextBlock x:Name="C1ButtonLabel" Text="Кнопка мыши" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <ComboBox x:Name="Clicker1MouseCombo" SelectionChanged="MouseCombo_SelectionChanged"><ComboBoxItem Content="Left" Tag="left"/><ComboBoxItem Content="Right" Tag="right"/><ComboBoxItem Content="Middle" Tag="middle"/></ComboBox>
+                                            <Button x:Name="Clicker1ToggleButton" Content="START / STOP" Style="{StaticResource PrimaryButton}" Margin="0,16,0,0" Click="ToggleClicker_Click" Tag="1"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="CLICKER 2" Foreground="{StaticResource Cyan}" FontWeight="Black" FontSize="18"/>
+                                            <TextBlock x:Name="C2HotkeyLabel" Text="Хоткей" Foreground="{StaticResource TextMuted}" Margin="0,16,0,5"/>
+                                            <Button x:Name="Clicker2HotkeyButton" Content="F7" Style="{StaticResource SecondaryButton}" Click="HotkeyButton_Click" Tag="clicker2"/>
+                                            <TextBlock x:Name="C2CpsLabel" Text="Скорость · 18 CPS" Foreground="{StaticResource TextMuted}" Margin="0,14,0,4"/>
+                                            <Slider x:Name="Clicker2CpsSlider" Minimum="1" Maximum="60" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="ClickerCps_ValueChanged"/>
+                                            <TextBlock x:Name="C2ButtonLabel" Text="Кнопка мыши" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <ComboBox x:Name="Clicker2MouseCombo" SelectionChanged="MouseCombo_SelectionChanged"><ComboBoxItem Content="Left" Tag="left"/><ComboBoxItem Content="Right" Tag="right"/><ComboBoxItem Content="Middle" Tag="middle"/></ComboBox>
+                                            <Button x:Name="Clicker2ToggleButton" Content="START / STOP" Style="{StaticResource PrimaryButton}" Margin="0,16,0,0" Click="ToggleClicker_Click" Tag="2"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="MacrosPage" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="MacrosTitle" Text="Макросы" Foreground="White" FontSize="30" FontWeight="Black"/>
+                                <TextBlock x:Name="MacrosSubtitle" Text="Оба макроса можно держать включёнными одновременно" Foreground="{StaticResource TextMuted}" Margin="0,5,0,18"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="BOLT PUSH" Foreground="{StaticResource Purple}" FontSize="19" FontWeight="Black"/>
+                                            <TextBlock Text="V → V → V → SHIFT → Coordinate" Foreground="#B7C1D4" Margin="0,5,0,14"/>
+                                            <CheckBox x:Name="BoltPushEnabledCheck" Content="Enabled" Checked="MacroSetting_Changed" Unchecked="MacroSetting_Changed"/>
+                                            <TextBlock x:Name="BpHotkeyLabel" Text="Хоткей" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <Button x:Name="BoltPushHotkeyButton" Content="E" Style="{StaticResource SecondaryButton}" Click="HotkeyButton_Click" Tag="boltpush"/>
+                                            <TextBlock x:Name="BpSpeedLabel" Text="Скорость" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <ComboBox x:Name="BoltPushSpeedCombo" SelectionChanged="MacroSetting_Changed"><ComboBoxItem Content="Instant" Tag="instant"/><ComboBoxItem Content="Fast" Tag="fast"/><ComboBoxItem Content="Safe" Tag="safe"/></ComboBox>
+                                            <CheckBox x:Name="BoltPushCoordCheck" Content="Click saved coordinate" Margin="0,13,0,0" Checked="MacroSetting_Changed" Unchecked="MacroSetting_Changed"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="BOLTS" Foreground="{StaticResource Cyan}" FontSize="19" FontWeight="Black"/>
+                                            <TextBlock Text="V → V → V" Foreground="#B7C1D4" Margin="0,5,0,14"/>
+                                            <CheckBox x:Name="BoltsEnabledCheck" Content="Enabled" Checked="MacroSetting_Changed" Unchecked="MacroSetting_Changed"/>
+                                            <TextBlock x:Name="BoltsHotkeyLabel" Text="Хоткей" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <Button x:Name="BoltsHotkeyButton" Content="V" Style="{StaticResource SecondaryButton}" Click="HotkeyButton_Click" Tag="bolts"/>
+                                            <TextBlock x:Name="BoltsSpeedLabel" Text="Скорость" Foreground="{StaticResource TextMuted}" Margin="0,14,0,5"/>
+                                            <ComboBox x:Name="BoltsSpeedCombo" SelectionChanged="MacroSetting_Changed"><ComboBoxItem Content="Instant" Tag="instant"/><ComboBoxItem Content="Fast" Tag="fast"/><ComboBoxItem Content="Safe" Tag="safe"/></ComboBox>
+                                            <Border Background="#111722" BorderBrush="#303B50" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,14,0,0"><TextBlock x:Name="MacroTip" Text="Нажатия отправляются через SendInput с безопасным down/up." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/></Border>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="CoordsPage" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="CoordsTitle" Text="Координаты" Foreground="White" FontSize="30" FontWeight="Black"/>
+                                <TextBlock x:Name="CoordsSubtitle" Text="ARM F6 → наведи мышь → нажми F6" Foreground="{StaticResource TextMuted}" Margin="0,5,0,18"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="0.85*"/></Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock x:Name="SavedCoordsTitle" Text="Сохранённые точки" Foreground="White" FontSize="17" FontWeight="Bold"/>
+                                            <ListBox x:Name="CoordinatesList" Height="280" Margin="0,12,0,12" Background="#0D121C" BorderBrush="#303B50" Foreground="White" SelectionChanged="CoordinatesList_SelectionChanged"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button x:Name="ArmF6Button" Content="ARM F6" Style="{StaticResource PrimaryButton}" Width="130" Click="ArmF6_Click"/>
+                                                <Button x:Name="DeleteCoordButton" Content="Удалить" Style="{StaticResource SecondaryButton}" Width="110" Margin="10,0,0,0" Click="DeleteCoord_Click"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock x:Name="ActiveCoordTitle" Text="Bolt Push target" Foreground="{StaticResource Cyan}" FontSize="17" FontWeight="Bold"/>
+                                            <TextBlock x:Name="ActiveCoordText" Text="Не выбрано" Foreground="White" FontSize="22" FontWeight="Black" Margin="0,18,0,4"/>
+                                            <TextBlock x:Name="ActiveCoordHint" Text="Выбери точку слева — она сразу станет активной для Bolt Push." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="WallhopPage" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="Wallhop" Foreground="White" FontSize="30" FontWeight="Black"/>
+                                <TextBlock x:Name="WallhopSubtitle" Text="Две стороны как в 5.22" Foreground="{StaticResource TextMuted}" Margin="0,5,0,18"/>
+                                <Border Style="{StaticResource CardStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock x:Name="WhLeftLabel" Text="LEFT HOTKEY" Foreground="{StaticResource Purple}" FontWeight="Bold"/>
+                                            <Button x:Name="WallhopLeftHotkeyButton" Content="Z" Style="{StaticResource SecondaryButton}" Margin="0,8,0,16" Click="HotkeyButton_Click" Tag="wallleft"/>
+                                            <TextBlock x:Name="WhRightLabel" Text="RIGHT HOTKEY" Foreground="{StaticResource Cyan}" FontWeight="Bold"/>
+                                            <Button x:Name="WallhopRightHotkeyButton" Content="X" Style="{StaticResource SecondaryButton}" Margin="0,8,0,0" Click="HotkeyButton_Click" Tag="wallright"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock x:Name="WallhopPixelsLabel" Text="Поворот · 650 px" Foreground="{StaticResource TextMuted}"/>
+                                            <Slider x:Name="WallhopPixelsSlider" Minimum="50" Maximum="1600" TickFrequency="10" IsSnapToTickEnabled="True" ValueChanged="WallhopSetting_Changed" Margin="0,5,0,14"/>
+                                            <TextBlock x:Name="WallhopDelayLabel" Text="Возврат · 26 ms" Foreground="{StaticResource TextMuted}"/>
+                                            <Slider x:Name="WallhopDelaySlider" Minimum="1" Maximum="120" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="WallhopSetting_Changed" Margin="0,5,0,14"/>
+                                            <CheckBox x:Name="WallhopReturnCheck" Content="Return camera after turn" Checked="WallhopSetting_Changed" Unchecked="WallhopSetting_Changed"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="SettingsPage" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="SettingsTitle" Text="Настройки" Foreground="White" FontSize="30" FontWeight="Black"/>
+                                <TextBlock x:Name="SettingsSubtitle" Text="Язык, фон и параметры программы" Foreground="{StaticResource TextMuted}" Margin="0,5,0,18"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock x:Name="LanguageLabel" Text="Язык интерфейса" Foreground="White" FontWeight="Bold"/>
+                                            <ComboBox x:Name="LanguageCombo" Margin="0,8,0,18" SelectionChanged="LanguageCombo_SelectionChanged"><ComboBoxItem Content="Русский" Tag="ru"/><ComboBoxItem Content="English" Tag="en"/></ComboBox>
+                                            <TextBlock x:Name="BackgroundLabel" Text="Фон" Foreground="White" FontWeight="Bold"/>
+                                            <TextBlock x:Name="BackgroundPathText" Text="Default" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis" Margin="0,6,0,8"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button x:Name="ChooseBackgroundButton" Content="Фото / видео" Style="{StaticResource SecondaryButton}" Click="ChooseBackground_Click"/>
+                                                <Button x:Name="ClearBackgroundButton" Content="Очистить" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="ClearBackground_Click"/>
+                                            </StackPanel>
+                                            <CheckBox x:Name="StartupToastCheck" Content="Show xDragonsx on top at startup" Margin="0,18,0,0" Checked="StartupToast_Changed" Unchecked="StartupToast_Changed"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                        <StackPanel>
+                                            <TextBlock Text="ABOUT" Foreground="{StaticResource Cyan}" FontWeight="Black"/>
+                                            <TextBlock Text="RiuClicker 1.0" Foreground="White" FontSize="23" FontWeight="Black" Margin="0,8,0,3"/>
+                                            <TextBlock Text="C# · WPF · .NET 8 · Win32 SendInput" Foreground="{StaticResource TextMuted}"/>
+                                            <Separator Margin="0,18,0,16" Background="#303B50"/>
+                                            <Button x:Name="SaveButton" Content="Сохранить настройки" Style="{StaticResource PrimaryButton}" Click="Save_Click"/>
+                                            <Button x:Name="ResetButton" Content="Сбросить настройки" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0" Click="Reset_Click"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </ScrollViewer>
+
+                <Border x:Name="StartupToast" Width="320" Height="76" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#F21B2231" BorderBrush="#8B5CF6" BorderThickness="1" CornerRadius="14" Padding="14" Visibility="Collapsed" Opacity="0">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource Purple}" VerticalAlignment="Center"><TextBlock Text="R" Foreground="White" FontWeight="Black" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="xDragonsx on top" Foreground="White" FontWeight="Black" FontSize="15"/><TextBlock Text="RiuClicker 1.0" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,3,0,0"/></StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#F20B0F18" BorderBrush="#20293A" BorderThickness="0,1,0,0">
+                <Grid Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StatusText" Text="Готово" Foreground="#8E9AB0" VerticalAlignment="Center" FontSize="11"/>
+                    <TextBlock Grid.Column="1" Text="F12 · STOP ALL" Foreground="#FF7588" VerticalAlignment="Center" FontWeight="Bold" FontSize="10"/>
                 </Grid>
             </Border>
         </Grid>
