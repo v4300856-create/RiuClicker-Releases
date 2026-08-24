@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RiuClicker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="media-bg" class="media-bg"><video id="bg-video" loop muted playsinline></video></div>
+  <div class="ambient a1"></div><div class="ambient a2"></div>
+
+  <div id="intro" class="intro">
+    <div class="intro-card">
+      <div class="intro-kicker">RIUCLICKER 1.0</div>
+      <div class="intro-title">xDragonsx on top</div>
+      <div class="intro-progress"><i></i></div>
+    </div>
+  </div>
+
+  <div id="app" class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">R</div><div><b>RiuClicker</b><span>1.0 · RUST</span></div></div>
+      <nav>
+        <button class="nav active" data-page="home"><span>⌂</span><b data-i18n="nav_home">Home</b></button>
+        <button class="nav" data-page="clicker"><span>◉</span><b data-i18n="nav_clicker">Clicker</b></button>
+        <button class="nav" data-page="macros"><span>◆</span><b data-i18n="nav_macros">Macros</b></button>
+        <button class="nav" data-page="coordinates"><span>⌖</span><b data-i18n="nav_coords">Coordinates</b></button>
+        <button class="nav" data-page="lobby"><span>◎</span><b data-i18n="nav_lobby">Lobby</b></button>
+        <button class="nav" data-page="settings"><span>⚙</span><b data-i18n="nav_settings">Settings</b></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button id="kill-all" class="danger wide" data-i18n="stop_all">STOP ALL · F12</button>
+        <div class="engine-line"><i></i><span>Native engine online</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><span class="eyebrow">RIU / CONTROL CENTER</span><h1 id="page-title">Home</h1></div>
+        <div class="top-status"><span id="runtime-message">Ready</span><b id="top-version">v1.0</b></div>
+      </header>
+
+      <section class="page active" id="page-home">
+        <div class="hero panel">
+          <div class="hero-copy"><span class="pill">CLEAN BUILD</span><h2 data-i18n="hero_title">Macros first. No UI clutter.</h2><p data-i18n="hero_text">Reliable key timing, direct F6 coordinate capture and a simpler control layout.</p><div class="hero-actions"><button class="primary jump" data-page="macros" data-i18n="open_macros">OPEN MACROS</button><button class="ghost jump" data-page="coordinates" data-i18n="open_coords">COORDINATES</button></div></div>
+          <div class="hero-r"><span>R</span></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat panel"><span>CLICKER 1</span><b id="dash-c1">OFF</b><small id="dash-c1-meta"></small></div>
+          <div class="stat panel"><span>CLICKER 2</span><b id="dash-c2">OFF</b><small id="dash-c2-meta"></small></div>
+          <div class="stat panel"><span>MACROS</span><b id="dash-macros">READY</b><small id="dash-macros-meta"></small></div>
+          <div class="stat panel"><span>LOBBY</span><b id="dash-lobby">OFFLINE</b><small id="dash-lobby-meta"></small></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-clicker">
+        <div class="section-head"><div><span class="eyebrow">NATIVE INPUT</span><h2 data-i18n="clicker_title">Auto Clicker</h2></div></div>
+        <div class="two-col">
+          <article class="panel control-card">
+            <div class="card-head"><div><span>CLICKER 1</span><h3 id="c1-state">OFF</h3></div><button id="c1-toggle" class="primary" data-i18n="toggle">TOGGLE</button></div>
+            <label><span>CPS</span><input id="c1-cps" type="number" min="0.1" step="0.1"></label>
+            <label><span data-i18n="mouse_button">Mouse button</span><select id="c1-mouse"><option value="left">LEFT</option><option value="right">RIGHT</option><option value="middle">MIDDLE</option><option value="x1">MOUSE4</option><option value="x2">MOUSE5</option></select></label>
+            <button id="c1-hotkey" class="hotkey hotkey-btn" data-hotkey="clicker1">HOTKEY</button>
+          </article>
+          <article class="panel control-card">
+            <div class="card-head"><div><span>CLICKER 2</span><h3 id="c2-state">OFF</h3></div><button id="c2-toggle" class="primary" data-i18n="toggle">TOGGLE</button></div>
+            <label><span>CPS</span><input id="c2-cps" type="number" min="0.1" step="0.1"></label>
+            <label><span data-i18n="mouse_button">Mouse button</span><select id="c2-mouse"><option value="left">LEFT</option><option value="right">RIGHT</option><option value="middle">MIDDLE</option><option value="x1">MOUSE4</option><option value="x2">MOUSE5</option></select></label>
+            <button id="c2-hotkey" class="hotkey hotkey-btn" data-hotkey="clicker2">HOTKEY</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-macros">
+        <div class="section-head"><div><span class="eyebrow">RELIABLE ORDERED INPUT</span><h2 data-i18n="macros_title">Macros</h2></div><p data-i18n="macros_sub">Both can be armed at the same time.</p></div>
+        <div class="macro-grid">
+          <article class="panel macro-card accent-card">
+            <div class="card-head"><div><span>MACRO A</span><h3>Bolt Push</h3></div><label class="switch"><input id="bp-enabled" type="checkbox"><i></i></label></div>
+            <div class="sequence"><span>RMB</span><i>›</i><span>SHIFT</span><i>›</i><span>V</span><span>V</span><span>V</span><i>›</i><span>SHIFT</span><i>›</i><span>CLICK</span></div>
+            <div class="speed" data-action="bolt_push"><button data-speed="stable">STABLE</button><button data-speed="fast">FAST</button><button data-speed="turbo">TURBO</button><button data-speed="instant">INSTANT</button></div>
+            <button id="bp-hotkey" class="hotkey hotkey-btn" data-hotkey="bolt_push">HOTKEY</button>
+            <div class="coord-target">
+              <div><span data-i18n="target_coord">Target coordinate</span><b id="bp-coordinate-label">NOT SET</b><small id="bp-coordinate-xy">—</small></div>
+              <button id="bp-arm-f6" class="primary compact" data-i18n="arm_f6">ARM F6</button>
+            </div>
+            <button class="run-action test-btn" data-action="boltpush" data-i18n="test_macro">TEST MACRO</button>
+          </article>
+
+          <article class="panel macro-card">
+            <div class="card-head"><div><span>MACRO B</span><h3>Bolts</h3></div><label class="switch"><input id="bolts-enabled" type="checkbox"><i></i></label></div>
+            <div class="sequence centered"><span>V</span><span>V</span><span>V</span></div>
+            <div class="speed" data-action="bolts"><button data-speed="stable">STABLE</button><button data-speed="fast">FAST</button><button data-speed="turbo">TURBO</button><button data-speed="instant">INSTANT</button></div>
+            <button id="bolts-hotkey" class="hotkey hotkey-btn" data-hotkey="bolts">HOTKEY</button>
+            <div class="info-strip"><b data-i18n="reliable_timing">Reliable timing</b><span data-i18n="reliable_text">Each V has a real down/up cycle. No 1 ms fake taps.</span></div>
+            <button class="run-action test-btn" data-action="bolts" data-i18n="test_macro">TEST MACRO</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-coordinates">
+        <div class="section-head"><div><span class="eyebrow">F6 TARGET CAPTURE</span><h2 data-i18n="coords_title">Coordinates</h2></div><div class="head-actions"><button id="capture-f6" class="primary" data-i18n="arm_f6_capture">ARM F6 CAPTURE</button><button id="capture-now" class="ghost" data-i18n="capture_now">CAPTURE NOW</button></div></div>
+        <div class="panel helper"><b data-i18n="f6_how_title">How F6 works</b><span data-i18n="f6_how_text">Press ARM F6, switch to the game, move the cursor to the target, then press F6. The new point is selected for Bolt Push automatically.</span></div>
+        <div id="coordinate-list" class="coordinate-grid"></div>
+      </section>
+
+      <section class="page" id="page-lobby">
+        <div class="section-head"><div><span class="eyebrow">OWNER / MEMBER</span><h2 data-i18n="lobby_title">Macro Lobby</h2></div><div id="squad-role" class="role-chip">OFFLINE</div></div>
+        <div class="two-col">
+          <article class="panel control-card"><h3 data-i18n="owner">Owner</h3><label><span data-i18n="name">Name</span><input id="squad-name" placeholder="Player"></label><label><span>PORT</span><input id="squad-port" type="number"></label><button id="squad-host" class="primary wide" data-i18n="create_lobby">CREATE LOBBY</button><div class="code-box"><span data-i18n="code">Code</span><b id="squad-code">—</b></div></article>
+          <article class="panel control-card"><h3 data-i18n="member">Member</h3><label><span data-i18n="join_code">Join code</span><input id="squad-join-code"></label><button id="squad-join" class="primary wide" data-i18n="join">JOIN</button><button id="squad-leave" class="ghost wide" data-i18n="leave">LEAVE</button><div class="member-row"><span id="squad-members">0 MEMBERS</span><div id="squad-member-list"></div></div></article>
+        </div>
+        <div class="panel mapping"><div><span>E</span><select id="lobby-e-action"><option value="boltpush">Bolt Push</option><option value="bolts">Bolts</option><option value="none">None</option></select></div><div><span>V</span><select id="lobby-v-action"><option value="bolts">Bolts</option><option value="boltpush">Bolt Push</option><option value="none">None</option></select></div></div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="section-head"><div><span class="eyebrow">APP / VERSION 1.0</span><h2 data-i18n="settings_title">Settings</h2></div></div>
+        <div class="settings-grid">
+          <article class="panel control-card"><h3 data-i18n="language">Language</h3><div class="segmented lang"><button data-lang="ru">Русский</button><button data-lang="en">English</button></div><p class="muted" data-i18n="lang_hint">Changes immediately and is saved.</p></article>
+          <article class="panel control-card"><h3 data-i18n="background">Background</h3><div class="button-row"><button id="pick-bg" class="primary" data-i18n="choose_media">CHOOSE PHOTO / VIDEO</button><button id="clear-bg" class="ghost" data-i18n="clear">CLEAR</button></div><p id="bg-path" class="path">No media selected</p></article>
+          <article class="panel control-card"><h3 data-i18n="appearance">Appearance</h3><label><span data-i18n="panel_opacity">Panel opacity</span><input id="panel-opacity" type="range" min="35" max="100"><b id="opacity-value">84%</b></label><label class="check-row"><span data-i18n="intro">Startup intro</span><input id="intro-enabled" type="checkbox"></label></article>
+          <article class="panel control-card"><h3 data-i18n="updates">Updates</h3><div class="update-box"><span data-i18n="current_version">Current version</span><b>1.0</b></div><p class="muted" data-i18n="update_hint">Auto-update will use GitHub Releases. Until a newer public version exists, this stays 1.0.</p><div id="update-status" class="status-note">GitHub release channel</div></article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
