@@ -1,0 +1,179 @@
+name: Refresh Free RiuClicker v1.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/free-v10-cps-refresh.py'
+      - '.github/workflows/free-v10-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: refresh-free-v10
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore verified C# source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Apply Free fixes and Pulse UI
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization patch failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch high-CPS base patch' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'High-CPS base patch failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'UI 5.22 patch failed' }
+          python .build/free-riuclicker.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free edition patch failed' }
+          python .build/free-v11-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Pulse/reliable macro patch failed' }
+          python .build/free-v10-cps-refresh.py
+          if ($LASTEXITCODE -ne 0) { throw 'Free v1.0 CPS refresh failed' }
+
+      - name: Validate refreshed Free v1.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'WaitUntil(nextClickTick' -SimpleMatch)) { throw 'Absolute CPS scheduler missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'timeBeginPeriod(1)' -SimpleMatch)) { throw '1ms timer resolution missing' }
+          if (-not (Select-String -Path 'src/InputService.cs' -Pattern 'SendMouseClick' -SimpleMatch)) { throw 'Batched SendInput click missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml.cs' -Pattern 'CPS actual' -SimpleMatch)) { throw 'Actual CPS display missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="1|500"' -SimpleMatch)) { throw 'Clicker 1 500 preset missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Tag="2|500"' -SimpleMatch)) { throw 'Clicker 2 500 preset missing' }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.0.1</Version>' -SimpleMatch)) { throw 'Refresh version missing' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Content="↗   Wallhop"' -SimpleMatch) { throw 'Wallhop should not be in Free' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build Free RiuClicker
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=FreeRiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/free
+          if ($LASTEXITCODE -ne 0) { throw 'Free build failed' }
+          if (-not (Test-Path 'out/free/FreeRiuClicker.exe')) { throw 'EXE missing' }
+          Copy-Item out/free/FreeRiuClicker.exe out/Free-RiuClicker.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/Free-RiuClicker.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/Free-RiuClicker.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/Free-RiuClicker-Source.zip -Force
+          (Get-FileHash out/Free-RiuClicker.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/Free-RiuClicker.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Free-RiuClicker-v1.0-Refresh
+          path: |
+            out/Free-RiuClicker.exe
+            out/Free-RiuClicker.zip
+            out/Free-RiuClicker-Source.zip
+            out/Free-RiuClicker.sha256.txt
+          retention-days: 30
+
+      - name: Upload directly to free-v1.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# Free RiuClicker 1.0 · Pulse Refresh',
+            '',
+            'Updated in-place on the free-v1.0 download page.',
+            '',
+            'Fixed:',
+            '- High CPS engine rebuilt around absolute Stopwatch deadlines',
+            '- 500 CPS now targets a 2.000 ms cadence inside RiuClicker',
+            '- 1 ms Windows timer resolution while the clicker is running',
+            '- Mouse down + up sent as one SendInput batch',
+            '- Burst pauses no longer throttle exact high-speed mode at 100+ CPS',
+            '- Added live generated CPS display',
+            '- Added 500 CPS quick preset',
+            '- Reliable final macro click from the Pulse update',
+            '',
+            'UI:',
+            '- Pulse violet/cyan interface refresh',
+            '- Free edition stays English-only',
+            '',
+            'Note: a game can impose its own click/input rate limit; the CPS actual value shows what RiuClicker itself is generating.'
+          ) | Set-Content release-notes.md
+
+          $assets = @(
+            'out/Free-RiuClicker.exe',
+            'out/Free-RiuClicker.zip',
+            'out/Free-RiuClicker-Source.zip',
+            'out/Free-RiuClicker.sha256.txt'
+          )
+          gh release view free-v1.0 --json tagName *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'free-v1.0 release does not exist' }
+          gh release upload free-v1.0 $assets --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload refreshed Free assets' }
+          gh release edit free-v1.0 --title 'Free RiuClicker 1.0 · Pulse Refresh' --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Could not update free-v1.0 release page' }
+
+      - name: Verify release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh release view free-v1.0 --json tagName,assets,url | ConvertFrom-Json
+          if ($release.tagName -ne 'free-v1.0') { throw 'Wrong release tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('Free-RiuClicker.exe','Free-RiuClicker.zip','Free-RiuClicker-Source.zip','Free-RiuClicker.sha256.txt')) {
+            if ($name -notin $names) { throw "$name missing from free-v1.0" }
+          }
+          Write-Host "Verified $($release.url)"
+
+      - name: Record status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=free-v1.0',
+            'build=free-v1.0-pulse-high-cps-refresh'
+          ) | Set-Content publish-free-v10-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add publish-free-v10-status.txt
+          git commit -m 'Record Free v1.0 refresh status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
