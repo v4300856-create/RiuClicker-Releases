@@ -1,0 +1,155 @@
+name: Publish Unified Free RiuClicker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/free-unified-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep old Free 1.0 binary
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path old -Force | Out-Null
+          gh release download free-v1.0 --pattern 'Free-RiuClicker.exe' --dir old --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download old Free 1.0' }
+          Move-Item old/Free-RiuClicker.exe old/Free-RiuClicker-1.0.exe -Force
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download source base' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Build new Free 1.1 with both fixes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download CPS base hotfix' }
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+          python .build/free-riuclicker.py
+          python .build/free-v11-hotfix.py
+          python .build/free-v10-cps-hotfix.py
+
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>1.1.0</Version>' -SimpleMatch)) { throw 'Free 1.1 version missing' }
+          if (-not (Select-String -Path 'src/InputService.cs' -Pattern 'MouseClickHeld' -SimpleMatch)) { throw 'Fast macro final click fix missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'HighResolutionTimer' -SimpleMatch)) { throw 'High CPS fix missing' }
+          if (-not (Select-String -Path 'src/Engines.cs' -Pattern 'WaitUntil(nextTick, token)' -SimpleMatch)) { throw 'Precise CPS loop missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish Free 1.1 exe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=FreeRiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out
+          if ($LASTEXITCODE -ne 0) { throw 'Free 1.1 build failed' }
+          if (-not (Test-Path 'out/FreeRiuClicker.exe')) { throw 'Built exe missing' }
+          Copy-Item out/FreeRiuClicker.exe out/Free-RiuClicker-1.1.exe -Force
+
+      - name: Publish one Free RiuClicker page
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# Free RiuClicker',
+            '',
+            'Choose which version you want to download:',
+            '',
+            '## Free RiuClicker 1.1 — NEW',
+            '- Fixed high CPS timing (including 500 CPS target)',
+            '- Fixed missing final click on Fast macro mode',
+            '- Pulse UI',
+            '',
+            '## Free RiuClicker 1.0',
+            '- Original Free release',
+            '',
+            'Download the EXE you need from Assets below.'
+          ) | Set-Content notes.md
+
+          $assets = @('old/Free-RiuClicker-1.0.exe','out/Free-RiuClicker-1.1.exe')
+          gh release view free-riuclicker --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload free-riuclicker $assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload unified Free assets' }
+            gh release edit free-riuclicker --title 'Free RiuClicker' --notes-file notes.md --latest
+          } else {
+            gh release create free-riuclicker $assets --title 'Free RiuClicker' --notes-file notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish unified Free release' }
+
+      - name: Remove old separate Free release pages
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view free-v1.0 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) { gh release delete free-v1.0 --yes --cleanup-tag }
+          gh release view free-v1.1 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) { gh release delete free-v1.1 --yes --cleanup-tag }
+
+      - name: Verify unified release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $r = gh release view free-riuclicker --json tagName,name,url,assets | ConvertFrom-Json
+          if ($r.tagName -ne 'free-riuclicker') { throw 'Wrong unified tag' }
+          if ($r.name -ne 'Free RiuClicker') { throw 'Wrong unified title' }
+          $names = @($r.assets | ForEach-Object { $_.name })
+          foreach ($n in @('Free-RiuClicker-1.0.exe','Free-RiuClicker-1.1.exe')) {
+            if ($n -notin $names) { throw "$n missing" }
+          }
+          Write-Host "Unified Free page: $($r.url)"
+
+      - name: Record unified Free status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=free-riuclicker',
+            'build=free-unified-1.0-and-1.1-cps-fastfix'
+          ) | Set-Content free-unified-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add free-unified-status.txt
+          git commit -m 'Record unified Free RiuClicker status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
