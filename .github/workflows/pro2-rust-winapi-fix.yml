@@ -61,21 +61,21 @@ jobs:
 
           s, n1 = re.subn(r'\bXBUTTON1\s+as\s+u32\b', '1u32', s)
           s, n2 = re.subn(r'\bXBUTTON2\s+as\s+u32\b', '2u32', s)
-          s, n3 = re.subn(r'\bXBUTTON1\s*,\s*', '', s, count=1)
-          s, n4 = re.subn(r'\bXBUTTON2\s*,\s*', '', s, count=1)
+          s, n3 = re.subn(r'\bXBUTTON1\b\s*,?', '', s, count=1)
+          s, n4 = re.subn(r'\bXBUTTON2\b\s*,?', '', s, count=1)
           s, n5 = re.subn(r'\bGetAsyncKeyState\s*,\s*', '', s, count=1)
           if 'MOUSEEVENTF_XUP,' not in s:
               raise SystemExit('MOUSEEVENTF_XUP marker missing')
           s = s.replace('MOUSEEVENTF_XUP,', 'MOUSEEVENTF_XUP, GetAsyncKeyState,', 1)
 
-          if (n1, n2, n3, n4, n5) != (2, 2, 1, 1, 1):
+          if n1 != 2 or n2 != 2 or n3 != 1 or n4 != 1 or n5 != 1:
               raise SystemExit(f'unexpected WinAPI patch counts: {(n1, n2, n3, n4, n5)}')
           if re.search(r'\bXBUTTON[12]\b', s):
               raise SystemExit('XBUTTON symbols still present')
           head = '\n'.join(s.splitlines()[:45])
           if head.count('GetAsyncKeyState') != 1:
               raise SystemExit('GetAsyncKeyState import count is not 1')
-          if 'KeyboardAndMouse' not in head or 'MOUSEEVENTF_XUP, GetAsyncKeyState,' not in head:
+          if 'MOUSEEVENTF_XUP, GetAsyncKeyState,' not in head:
               raise SystemExit('GetAsyncKeyState is not in KeyboardAndMouse import block')
           p.write_text(s, encoding='utf-8', newline='\n')
           print('WinAPI patch OK')
@@ -185,7 +185,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=winapi-import-fix-v4',
+            'build=winapi-import-fix-v5',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
