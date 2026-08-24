@@ -1,0 +1,237 @@
+name: Build RiuClicker 1.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/riu-v1.yml'
+      - '.build/pro2-clean-v1-core.py'
+      - '.build/v1-ui-index.html'
+      - '.build/v1-ui-app.js'
+      - '.build/v1-ui-styles.css'
+      - '.build/pro2-hotkey-intro-hotfix.py'
+      - '.build/pro2-wallhop522-hotfix.py'
+      - '.build/pro2-v20.patch.gz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: riuclicker-v1
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore Rust source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MSYS2_ARG_CONV_EXCL='*'
+          git fetch --no-tags origin pro2-rust:refs/remotes/origin/pro2-rust
+          : > pro2-rust.tar.gz.b64
+          for part in 00 01 02 03 04; do
+            git show "origin/pro2-rust:.build/pro2-rust.part${part}" >> pro2-rust.tar.gz.b64
+          done
+          tr -d '\r\n' < pro2-rust.tar.gz.b64 | base64 -d > pro2-rust.tar.gz
+          echo 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc  pro2-rust.tar.gz' | sha256sum -c -
+          rm -rf pro2-rust
+          tar -xzf pro2-rust.tar.gz
+
+      - name: Apply Macro Lobby base patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d < .build/pro2-v20.patch.gz.b64 | gzip -dc > pro2-v20.patch
+          git apply --check pro2-v20.patch
+          git apply pro2-v20.patch
+          grep -Fq 'macro_input_lock' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'Macro Lobby' pro2-rust/ui/index.html
+          node --check pro2-rust/ui/app.js
+
+      - name: Fix WinAPI imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('pro2-rust/src-tauri/src/main.rs')
+          s = p.read_text(encoding='utf-8')
+          s, n1 = re.subn(r'\bXBUTTON1\s+as\s+u32\b', '1i32', s)
+          s, n2 = re.subn(r'\bXBUTTON2\s+as\s+u32\b', '2i32', s)
+          s, n3 = re.subn(r'\bXBUTTON1\b\s*,?', '', s, count=1)
+          s, n4 = re.subn(r'\bXBUTTON2\b\s*,?', '', s, count=1)
+          s, n5 = re.subn(r'\bGetAsyncKeyState\s*,\s*', '', s, count=1)
+          if 'MOUSEEVENTF_XUP,' not in s:
+              raise SystemExit('MOUSEEVENTF_XUP marker missing')
+          s = s.replace('MOUSEEVENTF_XUP,', 'MOUSEEVENTF_XUP, GetAsyncKeyState,', 1)
+          if n1 != 2 or n2 != 2 or n3 != 1 or n4 != 1 or n5 != 1:
+              raise SystemExit(f'unexpected WinAPI patch counts: {(n1,n2,n3,n4,n5)}')
+          if re.search(r'\bXBUTTON[12]\b', s):
+              raise SystemExit('XBUTTON symbols still present')
+          p.write_text(s, encoding='utf-8', newline='\n')
+          print('WinAPI patch OK')
+          PY
+
+      - name: Apply native hotkey capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .build/pro2-hotkey-intro-hotfix.py
+          grep -Fq 'capture_hotkey_blocking' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'capture_hotkey,' pro2-rust/src-tauri/src/main.rs
+
+      - name: Restore exact 5.22 wallhop engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .build/pro2-wallhop522-hotfix.py
+          grep -Fq 'MOUSEEVENTF_MOVE_NOCOALESCE' pro2-rust/src-tauri/src/main.rs
+
+      - name: Apply clean RiuClicker 1.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .build/pro2-clean-v1-core.py
+          grep -Fq 'xDragonsx on top' pro2-rust/ui/index.html
+          grep -Fq 'page-wallhop' pro2-rust/ui/index.html
+          grep -Fq "invoke('capture_coordinate_f6')" pro2-rust/ui/app.js
+          grep -Fq 'async fn capture_coordinate_f6' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'language: String' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'RiuClicker 1.0' pro2-rust/src-tauri/tauri.conf.json
+          node --check pro2-rust/ui/app.js
+
+      - name: Generate Riu icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Drawing
+          $dir = 'pro2-rust/src-tauri/icons'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $png = Join-Path $dir 'riu-256.png'
+          $ico = Join-Path $dir 'icon.ico'
+          $bmp = New-Object System.Drawing.Bitmap 256,256
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+          $g.Clear([System.Drawing.Color]::FromArgb(255,8,11,20))
+          $rect = New-Object System.Drawing.RectangleF 12,12,232,232
+          $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect,[System.Drawing.Color]::FromArgb(255,93,52,210),[System.Drawing.Color]::FromArgb(255,30,187,211),35)
+          $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+          $r = 46.0
+          $path.AddArc(12,12,$r,$r,180,90); $path.AddArc(198,12,$r,$r,270,90)
+          $path.AddArc(198,198,$r,$r,0,90); $path.AddArc(12,198,$r,$r,90,90); $path.CloseFigure()
+          $g.FillPath($grad,$path)
+          $inner = New-Object System.Drawing.RectangleF 22,22,212,212
+          $dark = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(235,12,15,27))
+          $g.FillRectangle($dark,$inner)
+          $font = New-Object System.Drawing.Font 'Segoe UI Black',142,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel
+          $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+          $text = 'R'
+          $measure = $g.MeasureString($text,$font)
+          $x = (256-$measure.Width)/2 + 4; $y = (256-$measure.Height)/2 - 8
+          $g.DrawString($text,$font,$white,$x,$y)
+          $accent = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,156,111,255),7)
+          $g.DrawLine($accent,62,207,194,207)
+          $bmp.Save($png,[System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $bmp.Dispose(); $grad.Dispose(); $dark.Dispose(); $white.Dispose(); $font.Dispose(); $accent.Dispose(); $path.Dispose()
+          $bytes = [IO.File]::ReadAllBytes($png)
+          $fs = [IO.File]::Open($ico,[IO.FileMode]::Create)
+          $bw = [IO.BinaryWriter]::new($fs)
+          try {
+            $bw.Write([UInt16]0); $bw.Write([UInt16]1); $bw.Write([UInt16]1)
+            $bw.Write([Byte]0); $bw.Write([Byte]0); $bw.Write([Byte]0); $bw.Write([Byte]0)
+            $bw.Write([UInt16]1); $bw.Write([UInt16]32); $bw.Write([UInt32]$bytes.Length); $bw.Write([UInt32]22)
+            $bw.Write($bytes)
+          } finally { $bw.Dispose(); $fs.Dispose() }
+          if ((Get-Item $ico).Length -lt 5000) { throw 'Generated Riu icon is invalid' }
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pro2-rust/src-tauri -> target
+          cache-on-failure: true
+
+      - name: Compile RiuClicker 1.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
+          New-Item -ItemType Directory -Path out -Force | Out-Null
+          Copy-Item pro2-rust/src-tauri/target/release/riu-clicker-pro.exe out/RiuClicker-1.0.exe
+          $size = (Get-Item out/RiuClicker-1.0.exe).Length
+          if ($size -lt 1000000) { throw "EXE unexpectedly small: $size" }
+
+      - name: Package RiuClicker 1.0
+        shell: pwsh
+        run: |
+          Compress-Archive -Path pro2-rust/* -DestinationPath out/RiuClicker-1.0-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-1.0.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-1.0.zip -Force
+          (Get-FileHash out/RiuClicker-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.0.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-1.0
+          path: out/*
+          retention-days: 30
+
+      - name: Publish RiuClicker 1.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 1.0',
+            '',
+            '- Clean interface rebuilt around Clicker, Macros, Coordinates, Wallhop, Lobby and Settings',
+            '- Bolt Push and Bolts can be armed at the same time',
+            '- Macro timing uses reliable real key down/up intervals; V V V completes before the final Shift',
+            '- F6 coordinate capture: arm, switch to the game, aim the cursor, press F6; the point is selected automatically',
+            '- Native hotkey capture shows the actual key',
+            '- Wallhop uses the restored 5.22 left/right behavior and exact camera return',
+            '- Russian / English interface',
+            '- Photo/video background picker',
+            '- Startup intro: xDragonsx on top',
+            '- New Riu application icon',
+            '- Version reset to 1.0 for the new release line'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-1.0.exe','out/RiuClicker-1.0.zip','out/RiuClicker-1.0-Source.zip','out/RiuClicker-1.0.sha256.txt')
+          gh release view riu-v1.0 --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v1.0 $assets --clobber
+            gh release edit riu-v1.0 --title 'RiuClicker 1.0' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v1.0 $assets --title 'RiuClicker 1.0' --notes-file notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish RiuClicker 1.0' }
+
+      - name: Record RiuClicker 1.0 status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v1.0',
+            'build=clean-v1-core',
+            'engine=rust-aether'
+          ) | Set-Content riu-v1-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add riu-v1-status.txt
+          git commit -m 'Record RiuClicker 1.0 build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
