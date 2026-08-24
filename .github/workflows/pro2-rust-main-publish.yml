@@ -28,6 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export MSYS2_ARG_CONV_EXCL='*'
           git fetch --no-tags origin pro2-rust:refs/remotes/origin/pro2-rust
           : > pro2-rust.tar.gz.b64
           for part in 00 01 02 03 04; do
