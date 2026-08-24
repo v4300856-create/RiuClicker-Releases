@@ -1,6 +1,6 @@
 status=success
-run_id=32710583352
-commit=e0dcca94a6f0f2b99d24e970f35b70c08ff59e82
+run_id=32715120646
+commit=25f851a2692b21ca18b5911557337968224f6b21
 tag=pro-v2.0-beta
-build=winapi-type-fix-v6
+build=native-hotkey-intro-v7
 engine=rust-aether
