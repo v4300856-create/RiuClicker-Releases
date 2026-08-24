@@ -1,0 +1,2 @@
+trigger=native-hotkey-capture-intro-522
+text=xDragonsx on top
