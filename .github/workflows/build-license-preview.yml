@@ -1,0 +1,50 @@
+name: Build Paid License Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-license-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Checkout paid C# source
+        shell: bash
+        run: |
+          git fetch origin csharp-v1
+          git worktree add source origin/csharp-v1
+          test -f source/csharp-v1/LicenseService.cs
+          test -f source/csharp-v1/ActivationWindow.xaml
+          test -f source/license-server/functions/index.js
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Generate icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp=[System.Drawing.Bitmap]::new(64,64); $g=[System.Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([System.Drawing.Color]::FromArgb(139,92,246)); $ico=[System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs=[System.IO.File]::Create('source/csharp-v1/app.ico'); $ico.Save($fs); $fs.Close(); $g.Dispose(); $bmp.Dispose()
+      - name: Compile paid client
+        shell: pwsh
+        run: |
+          dotnet restore source/csharp-v1/RiuClicker.csproj
+          dotnet build source/csharp-v1/RiuClicker.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Paid license client failed to compile' }
+      - name: Validate Firebase backend syntax
+        shell: pwsh
+        run: |
+          cd source/license-server/functions
+          npm install
+          node --check index.js
+          if ($LASTEXITCODE -ne 0) { throw 'Firebase backend syntax check failed' }
