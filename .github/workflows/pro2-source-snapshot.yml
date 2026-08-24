@@ -1,0 +1,59 @@
+name: Export RiuClicker Pro 2.0 Source Snapshot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.build/pro2-source-snapshot-trigger.txt'
+      - '.github/workflows/pro2-source-snapshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  snapshot:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore Pro 2.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MSYS2_ARG_CONV_EXCL='*'
+          git fetch --no-tags origin pro2-rust:refs/remotes/origin/pro2-rust
+          : > pro2-rust.tar.gz.b64
+          for part in 00 01 02 03 04; do
+            git show "origin/pro2-rust:.build/pro2-rust.part${part}" >> pro2-rust.tar.gz.b64
+          done
+          tr -d '\r\n' < pro2-rust.tar.gz.b64 | base64 -d > pro2-rust.tar.gz
+          echo 'fe5ab7fbd3a3b31706790ecc6ac46dfc90f44912821d97736ffdf9b95f9702dc  pro2-rust.tar.gz' | sha256sum -c -
+          tar -xzf pro2-rust.tar.gz
+          test -f pro2-rust/src-tauri/src/main.rs
+          test -f pro2-rust/ui/app.js
+          test -f pro2-rust/ui/index.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-2.0-Source-Snapshot
+          path: pro2-rust/**
+          retention-days: 7
+
+      - name: Record snapshot status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}"
+          ) | Set-Content pro2-source-snapshot-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pro2-source-snapshot-status.txt
+          git commit -m 'Record Pro 2.0 source snapshot status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git push }
