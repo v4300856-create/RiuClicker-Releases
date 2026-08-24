@@ -1,1 +1,1 @@
-build pro-v1.1-beta prism-ui-tab-fix
+build pro-v1.1-beta prism-ui-tab-fix + ordered-vvv-before-shift
