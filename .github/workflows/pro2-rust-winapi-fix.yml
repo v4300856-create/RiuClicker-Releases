@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/pro2-rust-winapi-fix.yml'
       - '.build/pro2-hotkey-intro-hotfix.py'
+      - '.build/pro2-wallhop522-hotfix.py'
   workflow_dispatch:
 
 permissions:
@@ -93,6 +94,16 @@ jobs:
           grep -Fq 'xDragonsx on top' pro2-rust/ui/index.html
           node --check pro2-rust/ui/app.js
 
+      - name: Restore 5.22 wallhop behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .build/pro2-wallhop522-hotfix.py
+          grep -Fq 'MOUSEEVENTF_MOVE_NOCOALESCE' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'Wallhop LEFT' pro2-rust/src-tauri/src/main.rs || grep -Fq 'Wallhop {}' pro2-rust/src-tauri/src/main.rs
+          grep -Fq "#wh-direction'" pro2-rust/ui/app.js
+          node --check pro2-rust/ui/app.js
+
       - name: Generate Windows icon
         shell: pwsh
         run: |
@@ -171,12 +182,13 @@ jobs:
           @(
             '# RiuClicker Pro 2.0 Beta',
             '',
-            '- Native Windows hotkey capture now shows the actual key instead of sticking on TAB',
+            '- Native Windows hotkey capture shows the actual key instead of sticking on TAB',
             '- Startup window shows xDragonsx on top in the 5.22-style intro',
+            '- Wallhop restored to 5.22-style Left/Right relative flick + exact camera return',
+            '- Wallhop no longer queues another same-direction flick while one is active',
             '- Bolt Push + Bolts can stay enabled together',
             '- Macro sequencing serialized; V V V completes before Shift in Instant mode',
-            '- Macro Lobby with explicit Owner/Member join and local E/V action mapping',
-            '- Wallhop, coordinates, two clickers, photo/video backgrounds and F12 stop retained'
+            '- Macro Lobby with explicit Owner/Member join and local E/V action mapping'
           ) | Set-Content notes.md
           $assets = @('out/RiuClicker-Pro-2.0-Beta.exe','out/RiuClicker-Pro-2.0-Beta.zip','out/RiuClicker-Pro-2.0-Beta-Source.zip','out/RiuClicker-Pro-2.0-Beta.sha256.txt')
           gh release view pro-v2.0-beta --json tagName *> $null
@@ -197,7 +209,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=native-hotkey-intro-v7',
+            'build=wallhop-522-v8',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
