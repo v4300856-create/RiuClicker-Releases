@@ -50,20 +50,30 @@ jobs:
           node --check pro2-rust/ui/app.js
 
       - name: Fix WinAPI imports
-        shell: pwsh
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          $path = 'pro2-rust/src-tauri/src/main.rs'
-          $s = Get-Content $path -Raw
-          $s = $s -replace 'MOUSEEVENTF_XDOWN,\s*MOUSEEVENTF_XUP,\s*XBUTTON1,\s*XBUTTON2,', 'MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, GetAsyncKeyState,'
-          $s = $s -replace 'WindowsAndMessaging::\{\s*GetAsyncKeyState,\s*GetCursorPos,\s*SetCursorPos\s*\}', 'WindowsAndMessaging::{GetCursorPos, SetCursorPos}'
-          $s = $s -replace '\bXBUTTON1\s+as\s+u32\b', '1u32'
-          $s = $s -replace '\bXBUTTON2\s+as\s+u32\b', '2u32'
-          Set-Content -Path $path -Value $s -NoNewline
-          if (Select-String -Path $path -Pattern '\bXBUTTON1\b|\bXBUTTON2\b' -Quiet) { throw 'XBUTTON symbols still present after WinAPI patch' }
-          $head = (Get-Content $path -TotalCount 45) -join "`n"
-          if ($head -notmatch 'KeyboardAndMouse::\{[\s\S]*GetAsyncKeyState') { throw 'GetAsyncKeyState was not moved to KeyboardAndMouse' }
-          Write-Host 'WinAPI import patch OK'
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('pro2-rust/src-tauri/src/main.rs')
+          s = p.read_text(encoding='utf-8')
+          s, n1 = re.subn(r'MOUSEEVENTF_XDOWN,\s*MOUSEEVENTF_XUP,\s*XBUTTON1,\s*XBUTTON2,',
+                          'MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, GetAsyncKeyState,', s, count=1)
+          s, n2 = re.subn(r'WindowsAndMessaging::\{\s*GetAsyncKeyState,\s*GetCursorPos,\s*SetCursorPos\s*\}',
+                          'WindowsAndMessaging::{GetCursorPos, SetCursorPos}', s, count=1)
+          s, n3 = re.subn(r'\bXBUTTON1\s+as\s+u32\b', '1u32', s)
+          s, n4 = re.subn(r'\bXBUTTON2\s+as\s+u32\b', '2u32', s)
+          if (n1, n2, n3, n4) != (1, 1, 2, 2):
+              raise SystemExit(f'unexpected WinAPI patch counts: {(n1, n2, n3, n4)}')
+          if re.search(r'\bXBUTTON[12]\b', s):
+              raise SystemExit('XBUTTON symbols still present')
+          head = '\n'.join(s.splitlines()[:45])
+          if 'GetAsyncKeyState' not in head or 'WindowsAndMessaging::{GetAsyncKeyState' in head:
+              raise SystemExit('GetAsyncKeyState import still wrong')
+          p.write_text(s, encoding='utf-8', newline='\n')
+          print('WinAPI patch OK')
+          PY
 
       - name: Generate Windows icon
         shell: pwsh
@@ -169,7 +179,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=pro-v2.0-beta',
-            'build=winapi-import-fix-v2',
+            'build=winapi-import-fix-v3',
             'engine=rust-aether'
           ) | Set-Content pro2-fix-status.txt
           git config user.name 'github-actions[bot]'
