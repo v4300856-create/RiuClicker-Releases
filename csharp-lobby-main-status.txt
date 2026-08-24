@@ -1,0 +1,6 @@
+status=failure
+run_id=32734110821
+commit=fe4c69ebbdbcaf07aa16d3ca90c03ca4cfa94d67
+source_branch=csharp-v1
+tag=csharp-lobby-v1.0
+build=csharp-low-latency-lobby-v1
