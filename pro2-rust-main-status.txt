@@ -1,5 +1,6 @@
 status=failure
-run_id=32704869155
-commit=44bf136b025aadb18af79190e85b25e0770801f0
-tag=pro-v2.0-rust-beta
-engine=rust-tauri-aether
+run_id=32707132898
+commit=93e00a81510978a22bb154339f228856db95e74f
+tag=pro-v2.0-beta
+build=macro-lobby-reliable-macros
+engine=rust-aether
