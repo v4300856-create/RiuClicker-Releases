@@ -6,6 +6,7 @@ on:
     paths:
       - '.build/pro2-rust-main-trigger.txt'
       - '.build/pro2-v20.patch.gz.b64'
+      - '.build/pro2-xbutton-fix.patch'
       - '.github/workflows/pro2-rust-main-publish.yml'
   workflow_dispatch:
 
@@ -43,13 +44,15 @@ jobs:
           test -f pro2-rust/ui/index.html
           test -f pro2-rust/ui/app.js
 
-      - name: Apply Pro 2.0 Macro Lobby patch
+      - name: Apply Pro 2.0 fixes
         shell: bash
         run: |
           set -euo pipefail
           base64 -d < .build/pro2-v20.patch.gz.b64 | gzip -dc > pro2-v20.patch
           git apply --check pro2-v20.patch
           git apply pro2-v20.patch
+          git apply --check .build/pro2-xbutton-fix.patch
+          git apply .build/pro2-xbutton-fix.patch
           grep -Fq 'macro_input_lock' pro2-rust/src-tauri/src/main.rs
           grep -Fq 'run_lobby_binding' pro2-rust/src-tauri/src/main.rs
           grep -Fq 'TRIGGER {command}' pro2-rust/src-tauri/src/main.rs
@@ -60,17 +63,18 @@ jobs:
           grep -Fq 'lobby-v-action' pro2-rust/ui/index.html
           grep -Fq 'features = ["protocol-asset"]' pro2-rust/src-tauri/Cargo.toml
           grep -Fq 'RiuClicker Pro 2.0' pro2-rust/src-tauri/tauri.conf.json
+          grep -Fq 'XBUTTON1 as i32' pro2-rust/src-tauri/src/main.rs
+          grep -Fq 'XBUTTON2 as i32' pro2-rust/src-tauri/src/main.rs
           node --check pro2-rust/ui/app.js
 
-      - name: Generate RiuClicker Windows icon
+      - name: Generate Windows icon
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = 'pro2-rust/src-tauri/icons'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           $path = Join-Path $dir 'icon.ico'
-          $w = 32
-          $h = 32
+          $w = 32; $h = 32
           $pixelBytes = $w * $h * 4
           $maskStride = [int](($w + 31) / 32) * 4
           $maskBytes = $maskStride * $h
@@ -78,56 +82,23 @@ jobs:
           $fs = [IO.File]::Open($path, [IO.FileMode]::Create)
           $bw = [IO.BinaryWriter]::new($fs)
           try {
-            $bw.Write([UInt16]0)
-            $bw.Write([UInt16]1)
-            $bw.Write([UInt16]1)
-            $bw.Write([Byte]$w)
-            $bw.Write([Byte]$h)
-            $bw.Write([Byte]0)
-            $bw.Write([Byte]0)
-            $bw.Write([UInt16]1)
-            $bw.Write([UInt16]32)
-            $bw.Write([UInt32]$imageBytes)
-            $bw.Write([UInt32]22)
-            $bw.Write([UInt32]40)
-            $bw.Write([Int32]$w)
-            $bw.Write([Int32]($h * 2))
-            $bw.Write([UInt16]1)
-            $bw.Write([UInt16]32)
-            $bw.Write([UInt32]0)
-            $bw.Write([UInt32]$pixelBytes)
-            $bw.Write([Int32]0)
-            $bw.Write([Int32]0)
-            $bw.Write([UInt32]0)
-            $bw.Write([UInt32]0)
+            $bw.Write([UInt16]0); $bw.Write([UInt16]1); $bw.Write([UInt16]1)
+            $bw.Write([Byte]$w); $bw.Write([Byte]$h); $bw.Write([Byte]0); $bw.Write([Byte]0)
+            $bw.Write([UInt16]1); $bw.Write([UInt16]32); $bw.Write([UInt32]$imageBytes); $bw.Write([UInt32]22)
+            $bw.Write([UInt32]40); $bw.Write([Int32]$w); $bw.Write([Int32]($h * 2)); $bw.Write([UInt16]1); $bw.Write([UInt16]32)
+            $bw.Write([UInt32]0); $bw.Write([UInt32]$pixelBytes); $bw.Write([Int32]0); $bw.Write([Int32]0); $bw.Write([UInt32]0); $bw.Write([UInt32]0)
             for ($y = 0; $y -lt $h; $y++) {
               for ($x = 0; $x -lt $w; $x++) {
-                $dx = $x - 15.5
-                $dy = $y - 15.5
-                $inside = ($dx*$dx + $dy*$dy) -lt 220
-                if ($inside) {
-                  $r = [Byte](110 + [int](($x / 31.0) * 95))
-                  $g = [Byte](70 + [int](($y / 31.0) * 45))
-                  $b = [Byte]238
-                } else {
-                  $r = [Byte]14; $g = [Byte]16; $b = [Byte]30
-                }
+                $dx = $x - 15.5; $dy = $y - 15.5
+                if (($dx*$dx + $dy*$dy) -lt 220) {
+                  $r = [Byte](110 + [int](($x / 31.0) * 95)); $g = [Byte](70 + [int](($y / 31.0) * 45)); $b = [Byte]238
+                } else { $r = [Byte]14; $g = [Byte]16; $b = [Byte]30 }
                 $bw.Write($b); $bw.Write($g); $bw.Write($r); $bw.Write([Byte]255)
               }
             }
             for ($i = 0; $i -lt $maskBytes; $i++) { $bw.Write([Byte]0) }
-          } finally {
-            $bw.Dispose()
-            $fs.Dispose()
-          }
+          } finally { $bw.Dispose(); $fs.Dispose() }
           if ((Get-Item $path).Length -lt 1000) { throw 'Generated icon is invalid' }
-
-      - name: Export patched source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: RiuClicker-Pro-2.0-Patched-Source
-          path: pro2-rust/**
-          retention-days: 7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -147,7 +118,7 @@ jobs:
           $size = (Get-Item out/RiuClicker-Pro-2.0-Beta.exe).Length
           if ($size -lt 3000000) { throw "EXE unexpectedly small: $size" }
 
-      - name: Package and hash
+      - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path package -Force | Out-Null
@@ -173,31 +144,18 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            '# RiuClicker Pro 2.0 Beta',
-            '',
-            'Complete Pro rewrite. Free RiuClicker is unchanged.',
-            '',
-            '- Product name restored to RiuClicker Pro 2.0',
-            '- New Aether interface and animated RIUCLICKER PRO startup intro',
-            '- Hotkey buttons update immediately after TAB / E / V / F-key / mouse capture',
-            '- Bolt Push and Bolts can both stay armed',
-            '- Macro input is serialized so the two macro sequences cannot corrupt each other',
-            '- Instant mode keeps real key edges and guarantees V V V before the second Shift',
-            '- Physical macro hotkeys are released before injected V V V starts',
-            '- Macro Lobby: owner creates a room, members explicitly join and appear by name',
-            '- Owner physical E/V are the only shared trigger messages',
-            '- Every PC maps lobby E and V to its own local Bolt Push / Bolts / None action',
-            '- No arbitrary remote keyboard, shell, file or remote-control commands',
-            '- Coordinates, Wallhop, photo/video backgrounds, two clickers and F12 stop retained',
-            '',
-            'Macro Lobby is direct owner-hosted TCP. Internet connections may require router port forwarding when NAT/CGNAT blocks incoming traffic.'
+            '# RiuClicker Pro 2.0 Beta', '',
+            '- New Pro 2.0 interface and startup intro',
+            '- Hotkey labels update immediately',
+            '- Bolt Push and Bolts can both stay enabled',
+            '- Reliable V V V -> Shift ordering on Instant',
+            '- Macro input serialization prevents sequences mixing',
+            '- Macro Lobby with explicit join and local E/V action mapping',
+            '- Only E/V lobby trigger messages are accepted',
+            '- Coordinates, Wallhop, photo/video backgrounds, two clickers and F12 stop retained', '',
+            'Macro Lobby is direct owner-hosted TCP. NAT/CGNAT may require router configuration.'
           ) | Set-Content notes.md
-          $assets = @(
-            'out/RiuClicker-Pro-2.0-Beta.exe',
-            'out/RiuClicker-Pro-2.0-Beta.zip',
-            'out/RiuClicker-Pro-2.0-Beta-Source.zip',
-            'out/RiuClicker-Pro-2.0-Beta.sha256.txt'
-          )
+          $assets = @('out/RiuClicker-Pro-2.0-Beta.exe','out/RiuClicker-Pro-2.0-Beta.zip','out/RiuClicker-Pro-2.0-Beta-Source.zip','out/RiuClicker-Pro-2.0-Beta.sha256.txt')
           gh release view pro-v2.0-beta --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload pro-v2.0-beta $assets --clobber
