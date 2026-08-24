@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -27,7 +28,6 @@ public sealed class LobbyService : IAsyncDisposable
     private string _displayName = "Player";
     private string _room = "";
     private string _role = "OFFLINE";
-    private Uri? _relayUri;
 
     public event Action<IReadOnlyList<string>>? MembersChanged;
     public event Action<string>? StatusChanged;
@@ -61,10 +61,14 @@ public sealed class LobbyService : IAsyncDisposable
 
     private async Task ConnectAsync(string relayUrl, string room, string name, string role)
     {
-        if (!Uri.TryCreate(relayUrl?.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != "ws" && uri.Scheme != "wss"))
+        if (!Uri.TryCreate(relayUrl?.Trim(), UriKind.Absolute, out var baseUri) || (baseUri.Scheme != "ws" && baseUri.Scheme != "wss"))
             throw new InvalidOperationException("Relay URL is not configured. Use a wss:// Cloudflare Worker address.");
 
-        _relayUri = uri;
+        var ub = new UriBuilder(baseUri);
+        var q = ub.Query.TrimStart('?');
+        ub.Query = string.IsNullOrWhiteSpace(q) ? $"room={Uri.EscapeDataString(room)}" : q + $"&room={Uri.EscapeDataString(room)}";
+        var uri = ub.Uri;
+
         _cts = new CancellationTokenSource();
         _ws = new ClientWebSocket();
         _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
