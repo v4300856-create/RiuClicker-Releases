@@ -1,5 +1,5 @@
 status=failure
-run_id=32704380173
-commit=53d01576229daa5682e5a8f7345107164bb02d38
+run_id=32704869155
+commit=44bf136b025aadb18af79190e85b25e0770801f0
 tag=pro-v2.0-rust-beta
 engine=rust-tauri-aether
