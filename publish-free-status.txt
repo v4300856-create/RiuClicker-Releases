@@ -1,5 +1,6 @@
 status=success
-run_id=32644586632
-commit=d0828ee5a2eb4b35594cbdaa89d67fd070c40f8b
-tag=free-v1.0
+run_id=32742649569
+commit=457094a2bf24dff10a1920120a71887524bba7fe
+tag=free-v1.1
+build=free-1.1-pulse-reliable-clicks
 publisher=dedicated
