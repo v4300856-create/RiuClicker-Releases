@@ -1,0 +1,6 @@
+status=failure
+run_id=32733954774
+commit=00ac05bb6ba8e2e8ec5ead8a29382c3b25de5479
+tag=csharp-lobby-v1.0
+build=csharp-low-latency-lobby-v1
+engine=csharp-wpf
