@@ -1,4 +1,4 @@
-name: Build RiuClicker Pro 2.0 Rust
+name: Build RiuClicker Pro 2.0
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: riuclicker-pro2-rust-main
+  group: riuclicker-pro2-main
   cancel-in-progress: true
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Restore Rust Pro source from pro2-rust branch
+      - name: Restore Pro 2.0 source
         shell: bash
         run: |
           set -euo pipefail
@@ -44,13 +44,20 @@ jobs:
           grep -q 'triple_v_ordered' pro2-rust/src-tauri/src/main.rs
           grep -q "'TAB'" pro2-rust/ui/app.js
 
+      - name: Export source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Pro-2.0-Source-Snapshot
+          path: pro2-rust/**
+          retention-days: 7
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: pro2-rust/src-tauri -> target
 
-      - name: Compile Rust / Tauri executable
+      - name: Compile RiuClicker Pro 2.0
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -61,60 +68,57 @@ jobs:
           cargo build --release --manifest-path pro2-rust/src-tauri/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
           New-Item -ItemType Directory -Path out -Force | Out-Null
-          Copy-Item pro2-rust/src-tauri/target/release/riu-clicker-pro.exe out/RiuClicker-Pro-2.0-Rust-Beta.exe
-          $size = (Get-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe).Length
+          Copy-Item pro2-rust/src-tauri/target/release/riu-clicker-pro.exe out/RiuClicker-Pro-2.0-Beta.exe
+          $size = (Get-Item out/RiuClicker-Pro-2.0-Beta.exe).Length
           if ($size -lt 3000000) { throw "EXE unexpectedly small: $size" }
 
       - name: Package and hash
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path package -Force | Out-Null
-          Copy-Item out/RiuClicker-Pro-2.0-Rust-Beta.exe package/
-          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-2.0-Rust-Beta.zip -Force
-          (Get-FileHash out/RiuClicker-Pro-2.0-Rust-Beta.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt
+          Copy-Item out/RiuClicker-Pro-2.0-Beta.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-Pro-2.0-Beta.zip -Force
+          (Get-FileHash out/RiuClicker-Pro-2.0-Beta.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro-2.0-Beta.sha256.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RiuClicker-Pro-2.0-Rust-Beta
+          name: RiuClicker-Pro-2.0-Beta
           path: |
-            out/RiuClicker-Pro-2.0-Rust-Beta.exe
-            out/RiuClicker-Pro-2.0-Rust-Beta.zip
-            out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt
+            out/RiuClicker-Pro-2.0-Beta.exe
+            out/RiuClicker-Pro-2.0-Beta.zip
+            out/RiuClicker-Pro-2.0-Beta.sha256.txt
           retention-days: 30
 
-      - name: Publish Rust beta release
+      - name: Publish beta release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           @(
-            '# RiuClicker Pro 2.0 Beta · Rust Aether',
+            '# RiuClicker Pro 2.0 Beta',
             '',
             'Complete rewrite. Free RiuClicker is unchanged.',
             '',
-            '- Rust native Windows input core; no C# and no Python runtime',
-            '- Completely new Aether interface and animated RIUCLICKER PRO startup intro',
-            '- Hotkey button changes instantly after TAB/E/V/F-key/Mouse key capture',
-            '- Two independent precise-CPS clickers',
-            '- Bolt Push + Bolts can both stay armed',
-            '- Instant mode enforces V V V before the second Shift',
-            '- Coordinates, Wallhop, photo/video backgrounds, F12 stop',
-            '- Owner-hosted Squad Sync with only E/V remote triggers',
-            '',
-            'Squad Sync is direct P2P. Internet hosting can require router port forwarding when NAT blocks incoming connections.'
+            '- New Aether interface and animated RIUCLICKER PRO intro',
+            '- Native Rust Windows input core; no C# and no Python runtime',
+            '- Hotkey buttons update instantly after capture',
+            '- Two independent clickers and two macro actions can stay armed together',
+            '- Bolt Push enforces V V V before the second Shift',
+            '- Coordinates, Wallhop, backgrounds and F12 stop',
+            '- Macro Lobby / Squad Sync uses explicit join and only E/V trigger messages'
           ) | Set-Content notes.md
-          $assets = @('out/RiuClicker-Pro-2.0-Rust-Beta.exe','out/RiuClicker-Pro-2.0-Rust-Beta.zip','out/RiuClicker-Pro-2.0-Rust-Beta.sha256.txt')
-          gh release view pro-v2.0-rust-beta --json tagName *> $null
+          $assets = @('out/RiuClicker-Pro-2.0-Beta.exe','out/RiuClicker-Pro-2.0-Beta.zip','out/RiuClicker-Pro-2.0-Beta.sha256.txt')
+          gh release view pro-v2.0-beta --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload pro-v2.0-rust-beta $assets --clobber
-            gh release edit pro-v2.0-rust-beta --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --prerelease
+            gh release upload pro-v2.0-beta $assets --clobber
+            gh release edit pro-v2.0-beta --title 'RiuClicker Pro 2.0 Beta' --notes-file notes.md --prerelease
           } else {
-            gh release create pro-v2.0-rust-beta $assets --title 'RiuClicker Pro 2.0 Beta · Rust Aether' --notes-file notes.md --target main --prerelease
+            gh release create pro-v2.0-beta $assets --title 'RiuClicker Pro 2.0 Beta' --notes-file notes.md --target main --prerelease
           }
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Rust Pro release' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish Pro 2.0 release' }
 
-      - name: Record Rust build status
+      - name: Record build status
         if: always()
         shell: pwsh
         run: |
@@ -122,11 +126,11 @@ jobs:
             "status=${{ job.status }}",
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
-            'tag=pro-v2.0-rust-beta',
-            'engine=rust-tauri-aether'
+            'tag=pro-v2.0-beta',
+            'engine=rust-aether'
           ) | Set-Content pro2-rust-main-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add pro2-rust-main-status.txt
-          git commit -m 'Record Rust Pro 2.0 build status' 2>$null
+          git commit -m 'Record RiuClicker Pro 2.0 build status' 2>$null
           if ($LASTEXITCODE -eq 0) { git push }
