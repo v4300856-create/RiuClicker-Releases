@@ -1,0 +1,186 @@
+name: Publish RiuClicker 5.23 Bolts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-523-bolts.yml'
+      - '.build/bolts-523.py'
+      - '.build/bolts-src/MainWindow.Bolts.cs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-523-bolts
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Restore complete 5.22 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch CPS patch' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS patch failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 patch failed' }
+
+      - name: Apply 5.23 Bolts tab
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/bolts-523.py
+          if ($LASTEXITCODE -ne 0) { throw 'Bolts tab patch failed' }
+
+      - name: Validate 5.23 Bolts build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          foreach ($marker in @(
+            'BOLT PUSH',
+            'Shift → V V V → Shift → saved-coordinate click',
+            'V → V → V',
+            'boltpush|stable',
+            'boltpush|fast',
+            'boltpush|turbo',
+            'boltpush|instant',
+            'bolts|stable',
+            'bolts|fast',
+            'bolts|turbo',
+            'bolts|instant',
+            'InitializeBoltsFeatures',
+            'RunBoltActionAsync'
+          )) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) {
+              throw "Missing Bolts marker: $marker"
+            }
+          }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Content="◆   Макросы"' -SimpleMatch) { throw 'Old Macros nav still visible' }
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.23.0</Version>' -SimpleMatch)) { throw '5.23 version missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker 5.23
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker523 `
+            -p:ApplicationIcon=app.ico `
+            -o out/523
+          if ($LASTEXITCODE -ne 0) { throw 'RiuClicker 5.23 build failed' }
+          Copy-Item out/523/RiuClicker523.exe out/RiuClicker-5.23.exe
+          if (-not (Test-Path 'out/RiuClicker-5.23.exe')) { throw 'RiuClicker-5.23.exe missing' }
+          if ((Get-Item 'out/RiuClicker-5.23.exe').Length -lt 10000000) { throw 'RiuClicker-5.23.exe unexpectedly small' }
+
+      - name: Package 5.23
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.23.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-5.23.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-5.23-Source.zip -Force
+          (Get-FileHash out/RiuClicker-5.23.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-5.23.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-5.23-Bolts
+          path: |
+            out/RiuClicker-5.23.exe
+            out/RiuClicker-5.23.zip
+            out/RiuClicker-5.23-Source.zip
+            out/RiuClicker-5.23.sha256.txt
+          retention-days: 30
+
+      - name: Publish 5.23 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 5.23 · Bolts',
+            '',
+            'Built directly on the restored 5.22 baseline.',
+            '',
+            '- Macros tab replaced by Bolts',
+            '- Bolt Push: Shift → V V V → Shift → saved-coordinate click',
+            '- Bolts: V → V → V',
+            '- Independent hotkeys',
+            '- Stable / Fast / Turbo / Instant for both actions',
+            '- Separate async action runners so the UI stays responsive',
+            '- Both actions can be armed at the same time',
+            '- 5.22 clickers, coordinates, profiles, Wallhop and appearance retained'
+          ) | Set-Content notes.md
+
+          $assets = @('out/RiuClicker-5.23.exe','out/RiuClicker-5.23.zip','out/RiuClicker-5.23-Source.zip','out/RiuClicker-5.23.sha256.txt')
+          gh release view riu-v5.23-bolts --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v5.23-bolts $assets --clobber
+            gh release edit riu-v5.23-bolts --title 'RiuClicker 5.23 · Bolts' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v5.23-bolts $assets --title 'RiuClicker 5.23 · Bolts' --notes-file notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish 5.23 release' }
+
+      - name: Verify public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view riu-v5.23-bolts --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'riu-v5.23-bolts') { throw 'Wrong release tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('RiuClicker-5.23.exe','RiuClicker-5.23.zip','RiuClicker-5.23-Source.zip','RiuClicker-5.23.sha256.txt')) {
+            if ($name -notin $names) { throw "$name missing from release" }
+          }
+
+      - name: Record 5.23 publish status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v5.23-bolts',
+            'build=riuclicker-5.23-bolts-async'
+          ) | Set-Content publish-523-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add publish-523-status.txt
+          git commit -m 'Record RiuClicker 5.23 publish status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
