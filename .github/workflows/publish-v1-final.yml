@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publish-v1-final.yml'
+      - '.build/getkey-v1.py'
   workflow_dispatch:
 
 permissions:
@@ -16,6 +17,7 @@ jobs:
     runs-on: windows-latest
     env:
       RIU_LICENSE_ENDPOINT: ${{ vars.RIU_LICENSE_ENDPOINT }}
+      RIU_GET_KEY_URL: ${{ vars.RIU_GET_KEY_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +46,7 @@ jobs:
           python .build/ui522-hotfix.py
           python .build/bolts-523.py
           python .build/license-v1.py
+          python .build/getkey-v1.py
 
       - name: Validate source
         shell: pwsh
@@ -55,6 +58,8 @@ jobs:
           if (Select-String -Path 'src/App.xaml' -Pattern 'StartupUri=' -SimpleMatch) { throw 'StartupUri bypass present' }
           if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.LicenseActivated' -SimpleMatch)) { throw 'Mandatory gate missing' }
           if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'MouseClickHeld("left"' -SimpleMatch)) { throw 'Held final click missing' }
+          if (-not (Select-String -Path 'src/ActivationWindow.xaml' -Pattern 'Content="GET KEY"' -SimpleMatch)) { throw 'GET KEY button missing' }
+          if (-not (Select-String -Path 'src/ActivationWindow.xaml.cs' -Pattern 'GetKey_Click' -SimpleMatch)) { throw 'GET KEY handler missing' }
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -81,11 +86,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $customGetKey = -not [string]::IsNullOrWhiteSpace($env:RIU_GET_KEY_URL)
           @(
             '# RiuClicker 1.0 · Key Test',
             '',
             '- Mandatory key window before the app opens',
             '- Test key: RIU-TEST-1000-0001',
+            '- GET KEY button added',
+            $(if ($customGetKey) { '- GET KEY opens the configured monetized publisher link.' } else { '- GET KEY currently opens Work.ink homepage for testing; set RIU_GET_KEY_URL to your own monetized link.' }),
             '- Bolt Push final coordinate click hardened for Turbo / Instant',
             '- Base: restored 5.22 + Bolts tab'
           ) | Set-Content notes.md
@@ -109,7 +117,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=riu-v1.0-key-test',
-            'build=riuclicker-1.0-final-keytest-clickfix'
+            'build=riuclicker-1.0-getkey-test'
           ) | Set-Content riu-v1-final-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
