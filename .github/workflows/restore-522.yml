@@ -1,0 +1,168 @@
+name: Restore RiuClicker 5.22
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-522.yml'
+      - '.build/restore-522-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: restore-riuclicker-522
+  cancel-in-progress: true
+
+jobs:
+  restore:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Restore complete 5.22 codebase
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Localization hotfix failed' }
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch CPS patch' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS patch failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 patch failed' }
+
+      - name: Validate restored 5.22
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          foreach ($marker in @(
+            '5.22',
+            'ФОН · ФОТО И ВИДЕО',
+            'BackgroundVideo',
+            'УДАЛИТЬ RIU CLICKER С ЭТОГО ПК'
+          )) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) {
+              throw "Missing 5.22 marker: $marker"
+            }
+          }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'Free RiuClicker' -SimpleMatch) { throw 'Free branding leaked into restored build' }
+          if (Select-String -Path 'src/MainWindow.xaml' -Pattern 'RIUCLICKER PRO' -SimpleMatch) { throw 'New Pro redesign leaked into restored build' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build restored RiuClicker 5.22
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker522 `
+            -p:ApplicationIcon=app.ico `
+            -o out/522
+          if ($LASTEXITCODE -ne 0) { throw 'RiuClicker 5.22 build failed' }
+          Copy-Item out/522/RiuClicker522.exe out/RiuClicker-5.22.exe
+          if (-not (Test-Path 'out/RiuClicker-5.22.exe')) { throw 'RiuClicker-5.22.exe missing' }
+
+      - name: Package restored source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.22.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-5.22.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-5.22-Source.zip -Force
+          (Get-FileHash out/RiuClicker-5.22.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-5.22.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-5.22-Restored
+          path: |
+            out/RiuClicker-5.22.exe
+            out/RiuClicker-5.22.zip
+            out/RiuClicker-5.22-Source.zip
+            out/RiuClicker-5.22.sha256.txt
+          retention-days: 30
+
+      - name: Publish restored 5.22 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 5.22 · Restored',
+            '',
+            'Restored from the verified original Riu source line.',
+            '',
+            '- Original 5.22 interface and feature set',
+            '- No Free edition restrictions',
+            '- No new C# redesign',
+            '- No license gate yet',
+            '- Photo/video backgrounds',
+            '- Coordinates, macros, clickers, profiles and Wallhop retained',
+            '- 5.22 CPS fixes retained',
+            '',
+            'This is now the baseline for future paid updates.'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-5.22.exe','out/RiuClicker-5.22.zip','out/RiuClicker-5.22-Source.zip','out/RiuClicker-5.22.sha256.txt')
+          gh release view riu-v5.22-restored --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v5.22-restored $assets --clobber
+            gh release edit riu-v5.22-restored --title 'RiuClicker 5.22 · Restored' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v5.22-restored $assets --title 'RiuClicker 5.22 · Restored' --notes-file notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish restored 5.22 release' }
+
+      - name: Verify public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = gh release view riu-v5.22-restored --json tagName,name,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'riu-v5.22-restored') { throw 'Wrong release tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('RiuClicker-5.22.exe','RiuClicker-5.22.zip','RiuClicker-5.22-Source.zip','RiuClicker-5.22.sha256.txt')) {
+            if ($name -notin $names) { throw "$name missing from release" }
+          }
+
+      - name: Record restore status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v5.22-restored',
+            'build=riuclicker-5.22-restored-baseline'
+          ) | Set-Content restore-522-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add restore-522-status.txt
+          git commit -m 'Record RiuClicker 5.22 restore status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
