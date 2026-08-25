@@ -1,6 +1,6 @@
-status=failure
-run_id=32814349153
-commit=c7bc8f9cc6d6c1bc4bc5a558137d508efa00013d
+status=cancelled
+run_id=32817735398
+commit=a5e2119c8b9915f17d970b81c9a442ea6882e0aa
 build=riuclicker-1.0-licensed
 license_endpoint_configured=False
 public_release_requires_endpoint=yes
