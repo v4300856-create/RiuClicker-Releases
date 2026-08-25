@@ -1,0 +1,118 @@
+name: Publish RiuClicker 1.0 Final Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v1-final.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RIU_LICENSE_ENDPOINT: ${{ vars.RIU_LICENSE_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+
+      - name: Restore 5.22 and apply Bolts
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+          python .build/bolts-523.py
+          python .build/license-v1.py
+
+      - name: Validate source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/App.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          if (Select-String -Path 'src/App.xaml' -Pattern 'StartupUri=' -SimpleMatch) { throw 'StartupUri bypass present' }
+          if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.LicenseActivated' -SimpleMatch)) { throw 'Mandatory gate missing' }
+          if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'MouseClickHeld("left"' -SimpleMatch)) { throw 'Held final click missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/v1
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          Copy-Item out/v1/RiuClicker.exe out/RiuClicker-1.0.exe
+          if ((Get-Item 'out/RiuClicker-1.0.exe').Length -lt 10000000) { throw 'EXE unexpectedly small' }
+          (Get-FileHash out/RiuClicker-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.0.sha256.txt
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 1.0 · Key Test',
+            '',
+            '- Mandatory key window before the app opens',
+            '- Test key: RIU-TEST-1000-0001',
+            '- Bolt Push final coordinate click hardened for Turbo / Instant',
+            '- Base: restored 5.22 + Bolts tab'
+          ) | Set-Content notes.md
+          gh release view riu-v1.0-key-test *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v1.0-key-test out/RiuClicker-1.0.exe out/RiuClicker-1.0.sha256.txt --clobber
+            gh release edit riu-v1.0-key-test --title 'RiuClicker 1.0 · Key Test' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v1.0-key-test out/RiuClicker-1.0.exe out/RiuClicker-1.0.sha256.txt --title 'RiuClicker 1.0 · Key Test' --notes-file notes.md --target main --latest
+          }
+          $r = gh release view riu-v1.0-key-test --json assets,tagName | ConvertFrom-Json
+          if ($r.tagName -ne 'riu-v1.0-key-test') { throw 'Wrong tag' }
+          if ('RiuClicker-1.0.exe' -notin @($r.assets | ForEach-Object { $_.name })) { throw 'EXE missing from release' }
+
+      - name: Record final status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v1.0-key-test',
+            'build=riuclicker-1.0-final-keytest-clickfix'
+          ) | Set-Content riu-v1-final-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add riu-v1-final-status.txt
+          git commit -m 'Record final RiuClicker 1.0 status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
