@@ -137,12 +137,19 @@ public partial class MainWindow
                 if (t.StepGap > 0) await BoltDelay(t.StepGap);
                 await TapTripleVOrdered(t, beforeFinalShift: true);
                 InputService.TapKey("SHIFT", t.ModifierHold, CancellationToken.None);
+
+                // Make absolutely sure the modifier is physically released before the click.
                 InputService.KeyUp("V");
                 InputService.KeyUp("SHIFT");
-                if (t.FinalSafety > 0) await BoltDelay(t.FinalSafety);
+                await BoltDelay(t.FinalSafety);
+
                 InputService.SetCursor(x, y);
-                if (t.PointerSettle > 0) await BoltDelay(t.PointerSettle);
-                InputService.MouseClick("left");
+                await BoltDelay(t.PointerSettle);
+
+                // A held click is much more reliable than an immediate down/up pair in games,
+                // especially on Turbo / Instant where the previous timings were only 3-5 ms.
+                InputService.MouseClickHeld("left", t.ClickHold, CancellationToken.None);
+                await BoltDelay(t.AfterClick);
                 Log($"Bolt Push · {s.SpeedMode.ToUpperInvariant()} · {x}, {y}");
             }
             finally
@@ -175,14 +182,14 @@ public partial class MainWindow
 
     private static Task BoltDelay(int ms) => ms <= 0 ? Task.CompletedTask : Task.Delay(ms);
 
-    private readonly record struct BoltTiming(int KeyHold, int ModifierHold, int StepGap, int PointerSettle, int FinalBarrier, int FinalSafety)
+    private readonly record struct BoltTiming(int KeyHold, int ModifierHold, int StepGap, int PointerSettle, int FinalBarrier, int FinalSafety, int ClickHold, int AfterClick)
     {
         public static BoltTiming For(string mode) => mode switch
         {
-            "stable" => new(24, 50, 22, 28, 16, 16),
-            "turbo" => new(4, 10, 2, 5, 4, 5),
-            "instant" => new(1, 4, 0, 1, 2, 3),
-            _ => new(10, 24, 7, 10, 8, 8)
+            "stable" => new(24, 50, 22, 28, 16, 18, 16, 8),
+            "turbo" => new(4, 10, 2, 8, 5, 12, 14, 6),
+            "instant" => new(1, 4, 0, 7, 3, 10, 14, 6),
+            _ => new(10, 24, 7, 10, 8, 10, 14, 6)
         };
     }
 }
