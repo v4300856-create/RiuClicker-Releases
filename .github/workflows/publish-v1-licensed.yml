@@ -1,0 +1,177 @@
+name: Build RiuClicker 1.0 Licensed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v1-licensed.yml'
+      - '.build/license-v1.py'
+      - '.build/bolts-523.py'
+      - '.build/bolts-src/MainWindow.Bolts.cs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: build-riuclicker-v1-licensed
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RIU_LICENSE_ENDPOINT: ${{ vars.RIU_LICENSE_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Riu source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download verified source artifact' }
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'Source extraction failed' }
+
+      - name: Restore 5.22 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch CPS patch' }
+          python cps520-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw 'CPS patch failed' }
+          python .build/ui522-hotfix.py
+          if ($LASTEXITCODE -ne 0) { throw '5.22 patch failed' }
+
+      - name: Apply Bolts tab
+        shell: pwsh
+        run: |
+          python .build/bolts-523.py
+          if ($LASTEXITCODE -ne 0) { throw 'Bolts patch failed' }
+
+      - name: Apply RiuClicker 1.0 license gate
+        shell: pwsh
+        run: |
+          python .build/license-v1.py
+          if ($LASTEXITCODE -ne 0) { throw 'License patch failed' }
+
+      - name: Validate RiuClicker 1.0 licensed source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/App.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          foreach ($marker in @(
+            'RiuClicker 1.0',
+            'Activate your license',
+            'LicenseService.ValidateAsync',
+            'LicenseService.ActivateAsync',
+            'BOLT PUSH',
+            'V → V → V',
+            '<Version>1.0.0</Version>'
+          )) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) {
+              throw "Missing v1 marker: $marker"
+            }
+          }
+          if (Select-String -Path 'src/App.xaml' -Pattern 'StartupUri=' -SimpleMatch) { throw 'StartupUri bypass still present' }
+          if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.Activated' -SimpleMatch)) { throw 'Mandatory activation gate missing' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker 1.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/v1
+          if ($LASTEXITCODE -ne 0) { throw 'RiuClicker 1.0 build failed' }
+          Copy-Item out/v1/RiuClicker.exe out/RiuClicker-1.0.exe
+          if ((Get-Item 'out/RiuClicker-1.0.exe').Length -lt 10000000) { throw 'RiuClicker-1.0.exe unexpectedly small' }
+
+      - name: Package build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-1.0.exe package/
+          Compress-Archive -Path package/* -DestinationPath out/RiuClicker-1.0.zip -Force
+          Compress-Archive -Path src/* -DestinationPath out/RiuClicker-1.0-Source.zip -Force
+          (Get-FileHash out/RiuClicker-1.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.0.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-1.0-Licensed-Preview
+          path: |
+            out/RiuClicker-1.0.exe
+            out/RiuClicker-1.0.zip
+            out/RiuClicker-1.0-Source.zip
+            out/RiuClicker-1.0.sha256.txt
+          retention-days: 30
+
+      - name: Publish working licensed release
+        if: ${{ env.RIU_LICENSE_ENDPOINT != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 1.0',
+            '',
+            'First release of the new RiuClicker line, based on restored 5.22.',
+            '',
+            '- Mandatory server-side license gate before MainWindow opens',
+            '- Saved-key validation on every launch',
+            '- Device binding support',
+            '- Bolts tab',
+            '- Bolt Push: Shift → V V V → Shift → saved-coordinate click',
+            '- Bolts: V → V → V',
+            '- Stable / Fast / Turbo / Instant modes',
+            '- Existing 5.22 clicker, coordinates, profiles, Wallhop and appearance retained'
+          ) | Set-Content notes.md
+          $assets = @('out/RiuClicker-1.0.exe','out/RiuClicker-1.0.zip','out/RiuClicker-1.0-Source.zip','out/RiuClicker-1.0.sha256.txt')
+          gh release view riu-v1.0-licensed --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v1.0-licensed $assets --clobber
+            gh release edit riu-v1.0-licensed --title 'RiuClicker 1.0' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v1.0-licensed $assets --title 'RiuClicker 1.0' --notes-file notes.md --target main --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish RiuClicker 1.0' }
+
+      - name: Record build status
+        if: always()
+        shell: pwsh
+        run: |
+          $configured = -not [string]::IsNullOrWhiteSpace($env:RIU_LICENSE_ENDPOINT)
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'build=riuclicker-1.0-licensed',
+            "license_endpoint_configured=$configured",
+            'public_release_requires_endpoint=yes'
+          ) | Set-Content riu-v1-license-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add riu-v1-license-status.txt
+          git commit -m 'Record RiuClicker 1.0 licensed build status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
