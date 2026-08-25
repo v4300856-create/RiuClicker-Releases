@@ -78,6 +78,8 @@ jobs:
             'Activate your license',
             'LicenseService.ValidateAsync',
             'LicenseService.ActivateAsync',
+            'LicenseActivated',
+            'MouseClickHeld',
             'BOLT PUSH',
             'V → V → V',
             '<Version>1.0.0</Version>'
@@ -87,7 +89,8 @@ jobs:
             }
           }
           if (Select-String -Path 'src/App.xaml' -Pattern 'StartupUri=' -SimpleMatch) { throw 'StartupUri bypass still present' }
-          if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.Activated' -SimpleMatch)) { throw 'Mandatory activation gate missing' }
+          if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.LicenseActivated' -SimpleMatch)) { throw 'Mandatory activation gate missing' }
+          if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'MouseClickHeld("left"' -SimpleMatch)) { throw 'Reliable final held click missing' }
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -118,7 +121,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RiuClicker-1.0-Licensed-Preview
+          name: RiuClicker-1.0-Key-Test
           path: |
             out/RiuClicker-1.0.exe
             out/RiuClicker-1.0.zip
@@ -126,36 +129,48 @@ jobs:
             out/RiuClicker-1.0.sha256.txt
           retention-days: 30
 
-      - name: Publish working licensed release
-        if: ${{ env.RIU_LICENSE_ENDPOINT != '' }}
+      - name: Publish RiuClicker 1.0 test release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $configured = -not [string]::IsNullOrWhiteSpace($env:RIU_LICENSE_ENDPOINT)
           @(
             '# RiuClicker 1.0',
             '',
-            'First release of the new RiuClicker line, based on restored 5.22.',
+            'Based on restored 5.22 with the Bolts tab.',
             '',
-            '- Mandatory server-side license gate before MainWindow opens',
-            '- Saved-key validation on every launch',
-            '- Device binding support',
-            '- Bolts tab',
+            '- Mandatory license window before MainWindow opens',
+            '- No StartupUri bypass',
             '- Bolt Push: Shift → V V V → Shift → saved-coordinate click',
+            '- Turbo / Instant final click uses a held mouse event + release safety gap',
             '- Bolts: V → V → V',
             '- Stable / Fast / Turbo / Instant modes',
-            '- Existing 5.22 clicker, coordinates, profiles, Wallhop and appearance retained'
+            '',
+            $(if ($configured) { '- Real server license endpoint is configured.' } else { '- TEST BUILD: temporary local test key is RIU-TEST-1000-0001. Firebase is not connected yet.' })
           ) | Set-Content notes.md
           $assets = @('out/RiuClicker-1.0.exe','out/RiuClicker-1.0.zip','out/RiuClicker-1.0-Source.zip','out/RiuClicker-1.0.sha256.txt')
-          gh release view riu-v1.0-licensed --json tagName *> $null
+          gh release view riu-v1.0-key-test --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload riu-v1.0-licensed $assets --clobber
-            gh release edit riu-v1.0-licensed --title 'RiuClicker 1.0' --notes-file notes.md --latest
+            gh release upload riu-v1.0-key-test $assets --clobber
+            gh release edit riu-v1.0-key-test --title 'RiuClicker 1.0 · Key Test' --notes-file notes.md --latest
           } else {
-            gh release create riu-v1.0-licensed $assets --title 'RiuClicker 1.0' --notes-file notes.md --target main --latest
+            gh release create riu-v1.0-key-test $assets --title 'RiuClicker 1.0 · Key Test' --notes-file notes.md --target main --latest
           }
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish RiuClicker 1.0' }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish RiuClicker 1.0 test release' }
+
+      - name: Verify public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh release view riu-v1.0-key-test --json tagName,assets,url | ConvertFrom-Json
+          if ($release.tagName -ne 'riu-v1.0-key-test') { throw 'Wrong tag' }
+          $names = @($release.assets | ForEach-Object { $_.name })
+          foreach ($name in @('RiuClicker-1.0.exe','RiuClicker-1.0.zip','RiuClicker-1.0-Source.zip','RiuClicker-1.0.sha256.txt')) {
+            if ($name -notin $names) { throw "$name missing" }
+          }
 
       - name: Record build status
         if: always()
@@ -166,9 +181,9 @@ jobs:
             "status=${{ job.status }}",
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
-            'build=riuclicker-1.0-licensed',
-            "license_endpoint_configured=$configured",
-            'public_release_requires_endpoint=yes'
+            'tag=riu-v1.0-key-test',
+            'build=riuclicker-1.0-key-test-clickfix',
+            "license_endpoint_configured=$configured"
           ) | Set-Content riu-v1-license-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
