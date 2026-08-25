@@ -1,0 +1,5 @@
+status=success
+run_id=32812530729
+commit=0d4a4307a5d519782ab338c3f38a899ef91d6bfb
+tag=riu-v5.22-restored
+build=riuclicker-5.22-restored-baseline
