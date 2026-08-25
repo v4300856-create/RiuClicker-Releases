@@ -1,5 +1,5 @@
-status=success
-run_id=32814100167
-commit=330a3e38e40e38833d54ef7ea1dc84ecb35b2041
+status=cancelled
+run_id=32817764873
+commit=bf6832ff248c5f6b21c85523507ca3bb02ef5f7f
 tag=riu-v5.23-bolts
 build=riuclicker-5.23-bolts-async
