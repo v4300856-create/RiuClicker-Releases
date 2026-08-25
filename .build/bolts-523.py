@@ -34,6 +34,13 @@ if 'public static void KeyUp(string name)' not in s:
     if target not in s:
         raise SystemExit('TapKey target not found')
     s = s.replace(target, addition)
+
+if 'public static void MouseClickHeld(' not in s:
+    marker = '    public static void MoveMouseRelative(int dx, int dy)'
+    if marker not in s:
+        raise SystemExit('InputService mouse helper insertion point missing')
+    method = '''    public static void MouseClickHeld(string button, int holdMs, CancellationToken token)\n    {\n        button = button.ToLowerInvariant();\n        var (down, up, data) = button switch\n        {\n            "right" or "mouse2" => (0x0008u, 0x0010u, 0u),\n            "middle" or "mouse3" => (0x0020u, 0x0040u, 0u),\n            "x1" or "mouse4" => (0x0080u, 0x0100u, 1u),\n            "x2" or "mouse5" => (0x0080u, 0x0100u, 2u),\n            _ => (0x0002u, 0x0004u, 0u)\n        };\n        SendMouse(down, 0, 0, data);\n        var ms = Math.Clamp(holdMs, 8, 24);\n        if (token.WaitHandle.WaitOne(ms))\n        {\n            SendMouse(up, 0, 0, data);\n            token.ThrowIfCancellationRequested();\n            return;\n        }\n        SendMouse(up, 0, 0, data);\n    }\n\n'''
+    s = s.replace(marker, method + marker)
 save(p, s)
 
 # Initialize the new tab and show friendly page title.
@@ -41,7 +48,6 @@ p, s = rw('MainWindow.xaml.cs')
 if 'InitializeBoltsFeatures();' not in s:
     s = s.replace('        ApplyBrandLabels();', '        ApplyBrandLabels();\n        InitializeBoltsFeatures();')
 s = s.replace('            "Macros" => (T("МАКРОСЫ"), T("Два макроса могут выполняться одновременно")),', '            "Macros" => ("BOLTS", "Bolt Push and Bolts · independent speed modes"),')
-# Dashboard wording if present.
 s = s.replace('Content="◆ МАКРОСЫ" Tag="Macros"', 'Content="◆ BOLTS" Tag="Macros"')
 save(p, s)
 
@@ -54,10 +60,8 @@ if 'var boltMatched =' not in s:
     s = s.replace(physical_marker, physical_marker + '''        var boltMatched = (_settings.Bolts.BoltPush.Enabled && string.Equals(_settings.Bolts.BoltPush.Hotkey, key, StringComparison.OrdinalIgnoreCase)) ||\n                          (_settings.Bolts.Bolts.Enabled && string.Equals(_settings.Bolts.Bolts.Hotkey, key, StringComparison.OrdinalIgnoreCase));\n        TriggerBoltHotkey(key);\n        if (boltMatched) return;\n\n''')
 if 'target == "boltpush"' not in s:
     s = s.replace('        else if (target == "wallhop") _settings.Wallhop.Hotkey = key;\n', '        else if (target == "wallhop") _settings.Wallhop.Hotkey = key;\n        else if (target == "boltpush") _settings.Bolts.BoltPush.Hotkey = key;\n        else if (target == "bolts") _settings.Bolts.Bolts.Hotkey = key;\n')
-# Keep modifier state clean on emergency stop.
 if 'InputService.KeyUp("SHIFT");' not in s:
     s = s.replace('        _macros.StopAll();\n', '        _macros.StopAll();\n        InputService.KeyUp("V");\n        InputService.KeyUp("SHIFT");\n', 1)
-# Refresh coordinates in Bolts selector after coordinate changes/load.
 coord_anchor = '''        RefreshCoordinateCombos();\n        RefreshCoordinateEditor();\n'''
 if coord_anchor in s and 'RefreshBoltsUi();' not in s[s.find(coord_anchor):s.find(coord_anchor)+len(coord_anchor)+80]:
     s = s.replace(coord_anchor, coord_anchor + '        RefreshBoltsUi();\n', 1)
@@ -88,7 +92,6 @@ s = s[:i] + bolts_ui + s[j:]
 s = s.replace('5.22', '5.23')
 save(p, s)
 
-# Brand/version-bearing code and project metadata.
 for name in ('MainWindow.xaml.cs', 'MainWindow.Extras.cs', 'BrandVisual.cs', 'Models.cs'):
     p, t = rw(name)
     t = t.replace('5.22', '5.23')
@@ -100,4 +103,4 @@ s = re.sub(r'<FileVersion>[^<]+</FileVersion>', '<FileVersion>5.23.0.0</FileVers
 s = re.sub(r'<AssemblyVersion>[^<]+</AssemblyVersion>', '<AssemblyVersion>5.23.0.0</AssemblyVersion>', s)
 save(p, s)
 
-print('Applied RiuClicker 5.23 Bolts tab patch')
+print('Applied RiuClicker 5.23 Bolts tab patch with reliable held final click')
