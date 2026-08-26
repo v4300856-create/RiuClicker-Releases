@@ -1,5 +1,5 @@
 status=success
-run_id=32954307097
-commit=ee2462118553d495bf3b0fa88d74f6cee546f97b
+run_id=32954456590
+commit=5965c38e18034b9ef02011d6325c75a876bf52c7
 tag=riu-v1.0-key-test
-build=riuclicker-1.0-third-bolts-macro
+build=riuclicker-1.0-dualcoord-locked
