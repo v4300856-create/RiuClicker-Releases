@@ -10,12 +10,19 @@ on:
       - '.build/dualcoord-lock-v11.py'
       - '.build/startup-banner-v1.py'
       - '.build/settings-save-v1.py'
+      - '.build/license-v1.py'
+      - '.build/license-v11-online.py'
       - '.build/getkey-v1.py'
+      - 'license-server/**'
   workflow_dispatch:
 
 permissions:
   contents: write
   actions: read
+
+concurrency:
+  group: publish-riuclicker-v11
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -25,6 +32,22 @@ jobs:
       RIU_GET_KEY_URL: ${{ vars.RIU_GET_KEY_URL }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate production key-system configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:RIU_LICENSE_ENDPOINT)) {
+            throw 'RIU_LICENSE_ENDPOINT is not configured. Refusing to publish a fake/local key system.'
+          }
+          if ($env:RIU_LICENSE_ENDPOINT -notmatch '^https://') {
+            throw 'RIU_LICENSE_ENDPOINT must be HTTPS.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RIU_GET_KEY_URL)) {
+            Write-Host 'RIU_GET_KEY_URL is empty; the built-in Loot-Link URL will be used.'
+          } elseif ($env:RIU_GET_KEY_URL -ne 'https://loot-link.com/s?zTsiS0pO') {
+            Write-Host "Using configured GET KEY URL: $env:RIU_GET_KEY_URL"
+          }
 
       - name: Download verified source base
         shell: pwsh
@@ -52,12 +75,13 @@ jobs:
           python .build/bolts-third-v1.py
           python .build/dualcoord-lock-v11.py
           python .build/license-v1.py
+          python .build/license-v11-online.py
           python .build/getkey-v1.py
           python .build/settings-save-v1.py
           python .build/startup-banner-v1.py
           python .build/version-11.py
 
-      - name: Validate 1.1 source
+      - name: Validate 1.1 source and key system
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -65,8 +89,14 @@ jobs:
           [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/StartupBannerWindow.xaml' -Raw) | Out-Null
-          foreach ($marker in @('RiuClicker 1.1','CLICK VVV CLICK','FIRST COORDINATE','SECOND COORDINATE','RESET COORDS','CoordinatesLocked','xDragonsx on top','MouseClickHeld("left"','<Version>1.1.0</Version>')) {
+          foreach ($marker in @('RiuClicker 1.1','CLICK VVV CLICK','FIRST COORDINATE','SECOND COORDINATE','RESET COORDS','CoordinatesLocked','xDragonsx on top','MouseClickHeld("left"','<Version>1.1.0</Version>','GET KEY','LicenseService.Endpoint')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Missing marker: $marker" }
+          }
+          if (Get-ChildItem src -Include '*.cs' -File -Recurse | Select-String -Pattern 'RIU-TEST-1000-0001' -SimpleMatch) {
+            throw 'Local test key is still present.'
+          }
+          if (-not (Select-String -Path 'src/ActivationWindow.xaml.cs' -Pattern 'Process.Start(new ProcessStartInfo(url)' -SimpleMatch)) {
+            throw 'GET KEY browser-only behavior missing.'
           }
 
       - uses: actions/setup-dotnet@v4
@@ -96,16 +126,13 @@ jobs:
           @(
             '# RiuClicker 1.1',
             '',
+            '- GET KEY opens Loot-Link only; it never downloads or reinstalls RiuClicker',
+            '- Keys are validated online by the production license server',
+            '- Loot-Link keys are device-bound and can expire',
+            '- No hard-coded local/test key is accepted',
             '- New macro: first locked coordinate click → V V V → second locked coordinate click',
-            '- First and second coordinates lock automatically after both are selected',
-            '- RESET COORDS is required to change them',
-            '- Separate hotkey and Stable / Fast / Turbo / Instant speed modes',
-            '- xDragonsx on top startup banner on every launch',
-            '- Appearance/background settings persistence',
-            '- Existing Bolt Push and Bolts macros retained',
-            '- Turbo / Instant final-click reliability fixes retained',
-            '',
-            'License backend remains in transition until the production server is connected.'
+            '- RESET COORDS is required to change locked coordinates',
+            '- Existing Bolt Push and Bolts macros retained'
           ) | Set-Content notes.md
           gh release view riu-v1.1 *> $null
           if ($LASTEXITCODE -eq 0) {
@@ -127,7 +154,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=riu-v1.1',
-            'build=riuclicker-1.1-dualcoord-locked'
+            'build=riuclicker-1.1-real-key-system'
           ) | Set-Content riu-v11-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
