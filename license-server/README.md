@@ -1,18 +1,23 @@
 # RiuClicker 1.1 key system
 
-This is the production key backend used by RiuClicker 1.1.
+This backend makes `GET KEY` behave like a real key system instead of downloading RiuClicker again.
 
-## Flow
+## User flow
 
-1. RiuClicker `GET KEY` opens `https://loot-link.com/s?zTsiS0pO` in the default browser.
-2. Loot-Link must redirect to the deployed `issueKey` function after completion.
-3. `issueKey` generates a fresh 24-hour key and shows it as text in the browser. It does **not** download RiuClicker.
-4. The user pastes the key into RiuClicker.
-5. RiuClicker calls `licenseApi` to activate/validate the key and bind it to one PC.
+1. RiuClicker calls the deployed `licenseApi/start?deviceId=...` endpoint.
+2. The server creates a short-lived claim for that PC.
+3. The server uses the LootLabs Redirect API to encrypt a one-time claim page URL.
+4. The browser is redirected to:
+   `https://loot-link.com/s?zTsiS0pO&puid=...&data=...`
+5. After the LootLabs tasks are completed, the encrypted destination overrides the old download destination.
+6. The final page generates a fresh 24-hour key, binds it to the PC that started the flow, and shows a `COPY KEY` button.
+7. The user pastes the key into RiuClicker and `licenseApi` validates it online.
 
-## Deploy
+The client never downloads or reinstalls RiuClicker from `GET KEY`.
 
-Install Firebase CLI, create/select a Firebase project with Firestore, then from this folder:
+## Required Firebase setup
+
+Create/select a Firebase project with Firestore enabled. From `license-server`:
 
 ```bash
 firebase login
@@ -20,24 +25,20 @@ firebase use YOUR_PROJECT_ID
 cd functions
 npm install
 cd ..
-firebase functions:secrets:set RIU_GATEWAY_TOKEN
+firebase functions:secrets:set LOOTLABS_API_TOKEN
 firebase deploy --only functions,firestore:rules
 ```
 
-After deployment, set the repository Actions variable `RIU_LICENSE_ENDPOINT` to:
+`LOOTLABS_API_TOKEN` must be the API token from the same LootLabs creator account that owns the link `https://loot-link.com/s?zTsiS0pO`. The Redirect API only works with links created using that account/token.
+
+After deploy, set the GitHub Actions repository variable `RIU_LICENSE_ENDPOINT` to:
 
 `https://europe-west1-YOUR_PROJECT_ID.cloudfunctions.net/licenseApi`
 
-`RIU_GET_KEY_URL` may be left empty because the client already defaults to:
+Then re-run **Publish RiuClicker 1.1**.
 
-`https://loot-link.com/s?zTsiS0pO`
+## Loot-Link destination
 
-## Loot-Link final destination
+You do **not** need to change the old destination manually for the RiuClicker flow. The server adds an encrypted `&data=` destination for each key session, which overrides the original destination after completion.
 
-Set the final destination of the Loot-Link to:
-
-`https://europe-west1-YOUR_PROJECT_ID.cloudfunctions.net/issueKey?gateway=YOUR_RIU_GATEWAY_TOKEN`
-
-That final destination is what makes Loot-Link show a generated key instead of downloading the autoclicker.
-
-Do not use the GitHub release `.exe` URL as the Loot-Link final destination.
+Do not put the LootLabs API token inside the client or the public repository.
