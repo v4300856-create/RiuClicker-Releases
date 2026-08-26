@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 
 root = Path('src')
-get_key_url = os.environ.get('RIU_GET_KEY_URL', '').strip() or 'https://work.ink/'
+get_key_url = os.environ.get('RIU_GET_KEY_URL', '').strip() or 'https://loot-link.com/s?zTsiS0pO'
 get_key_url_cs = get_key_url.replace('\\', '\\\\').replace('"', '\\"')
 
 # Add GET KEY button below activation button.
@@ -23,7 +23,7 @@ if 'using System.Diagnostics;' not in s:
     s = 'using System.Diagnostics;\n' + s
 if 'private void GetKey_Click' not in s:
     marker = '    private async void Activate_Click(object sender, RoutedEventArgs e)\n'
-    method = f'''    private void GetKey_Click(object sender, RoutedEventArgs e)\n    {{\n        const string url = "{get_key_url_cs}";\n        try\n        {{\n            Process.Start(new ProcessStartInfo(url) {{ UseShellExecute = true }});\n            StatusText.Text = url == "https://work.ink/"\n                ? "Test GET KEY link opened. Replace it with your own monetized Work.ink/LootLabs link before release."\n                : "GET KEY page opened in your browser.";\n        }}\n        catch\n        {{\n            StatusText.Text = "Could not open GET KEY page.";\n        }}\n    }}\n\n'''
+    method = f'''    private void GetKey_Click(object sender, RoutedEventArgs e)\n    {{\n        const string url = "{get_key_url_cs}";\n        try\n        {{\n            Process.Start(new ProcessStartInfo(url) {{ UseShellExecute = true }});\n            StatusText.Text = "GET KEY page opened in your browser.";\n        }}\n        catch\n        {{\n            StatusText.Text = "Could not open GET KEY page.";\n        }}\n    }}\n\n'''
     if marker not in s:
         raise SystemExit('Activate_Click marker missing')
     s = s.replace(marker, method + marker)
