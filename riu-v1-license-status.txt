@@ -1,6 +1,6 @@
-status=cancelled
-run_id=32817811701
-commit=329678ad6cd888551b5465d818e47c493d0eb801
-build=riuclicker-1.0-licensed
+status=success
+run_id=32961818406
+commit=056c61be3a6463245e7681d7aefc62c821d67e10
+tag=riu-v1.0-key-test
+build=riuclicker-1.0-key-test-clickfix
 license_endpoint_configured=False
-public_release_requires_endpoint=yes
