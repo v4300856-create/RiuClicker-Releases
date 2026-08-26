@@ -1,0 +1,133 @@
+name: Publish RiuClicker 1.1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v11.yml'
+      - '.build/version-11.py'
+      - '.build/bolts-third-v1.py'
+      - '.build/startup-banner-v1.py'
+      - '.build/settings-save-v1.py'
+      - '.build/getkey-v1.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RIU_LICENSE_ENDPOINT: ${{ vars.RIU_LICENSE_ENDPOINT }}
+      RIU_GET_KEY_URL: ${{ vars.RIU_GET_KEY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+
+      - name: Apply RiuClicker 1.1 patches
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+          python .build/bolts-523.py
+          python .build/bolts-third-v1.py
+          python .build/license-v1.py
+          python .build/getkey-v1.py
+          python .build/settings-save-v1.py
+          python .build/startup-banner-v1.py
+          python .build/version-11.py
+
+      - name: Validate 1.1 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml](Get-Content 'src/App.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/StartupBannerWindow.xaml' -Raw) | Out-Null
+          foreach ($marker in @('RiuClicker 1.1','CLICK VVV CLICK','RESET COORDS','xDragonsx on top','MouseClickHeld("left"','<Version>1.1.0</Version>')) {
+            if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Missing marker: $marker" }
+          }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker 1.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/v11
+          Copy-Item out/v11/RiuClicker.exe out/RiuClicker-1.1.exe
+          if ((Get-Item 'out/RiuClicker-1.1.exe').Length -lt 10000000) { throw 'EXE unexpectedly small' }
+          (Get-FileHash out/RiuClicker-1.1.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.1.sha256.txt
+
+      - name: Publish RiuClicker 1.1 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            '# RiuClicker 1.1',
+            '',
+            '- New macro: first locked coordinate click → V V V → second locked coordinate click',
+            '- First and second coordinates lock after setup; RESET COORDS is required to change them',
+            '- Separate hotkey and Stable / Fast / Turbo / Instant speed modes',
+            '- xDragonsx on top startup banner on every launch',
+            '- Appearance/background settings persistence',
+            '- Existing Bolt Push and Bolts macros retained',
+            '- Turbo / Instant final-click reliability fixes retained',
+            '',
+            'License backend remains in transition until the production server is connected.'
+          ) | Set-Content notes.md
+          gh release view riu-v1.1 *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload riu-v1.1 out/RiuClicker-1.1.exe out/RiuClicker-1.1.sha256.txt --clobber
+            gh release edit riu-v1.1 --title 'RiuClicker 1.1' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v1.1 out/RiuClicker-1.1.exe out/RiuClicker-1.1.sha256.txt --title 'RiuClicker 1.1' --notes-file notes.md --target main --latest
+          }
+          $r = gh release view riu-v1.1 --json tagName,assets | ConvertFrom-Json
+          if ($r.tagName -ne 'riu-v1.1') { throw 'Wrong tag' }
+          if ('RiuClicker-1.1.exe' -notin @($r.assets | ForEach-Object { $_.name })) { throw 'EXE missing' }
+
+      - name: Record RiuClicker 1.1 status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v1.1',
+            'build=riuclicker-1.1-dualcoord-locked'
+          ) | Set-Content riu-v11-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add riu-v11-status.txt
+          git commit -m 'Record RiuClicker 1.1 status' 2>$null
+          if ($LASTEXITCODE -eq 0) { git pull --rebase; git push }
