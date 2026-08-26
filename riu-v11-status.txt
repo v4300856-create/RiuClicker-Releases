@@ -1,5 +1,5 @@
-status=failure
-run_id=32955598238
-commit=f8446b870af9f75b567060e0b814cd7f383823c1
+status=success
+run_id=32955912627
+commit=e690fcf30f938bc7d26cc2c6ae2b116e035a4c1b
 tag=riu-v1.1
 build=riuclicker-1.1-dualcoord-locked
