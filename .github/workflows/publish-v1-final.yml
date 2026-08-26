@@ -7,6 +7,7 @@ on:
       - '.github/workflows/publish-v1-final.yml'
       - '.build/getkey-v1.py'
       - '.build/settings-save-v1.py'
+      - '.build/startup-banner-v1.py'
   workflow_dispatch:
 
 permissions:
@@ -49,6 +50,7 @@ jobs:
           python .build/license-v1.py
           python .build/getkey-v1.py
           python .build/settings-save-v1.py
+          python .build/startup-banner-v1.py
 
       - name: Validate source
         shell: pwsh
@@ -57,8 +59,11 @@ jobs:
           [xml](Get-Content 'src/App.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
+          [xml](Get-Content 'src/StartupBannerWindow.xaml' -Raw) | Out-Null
           if (Select-String -Path 'src/App.xaml' -Pattern 'StartupUri=' -SimpleMatch) { throw 'StartupUri bypass present' }
           if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'activation.ShowDialog() == true && activation.LicenseActivated' -SimpleMatch)) { throw 'Mandatory gate missing' }
+          if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'new StartupBannerWindow()' -SimpleMatch)) { throw 'Startup banner launch missing' }
+          if (-not (Select-String -Path 'src/StartupBannerWindow.xaml' -Pattern 'xDragonsx on top' -SimpleMatch)) { throw 'xDragonsx startup text missing' }
           if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'MouseClickHeld("left"' -SimpleMatch)) { throw 'Held final click missing' }
           if (-not (Select-String -Path 'src/ActivationWindow.xaml' -Pattern 'Content="GET KEY"' -SimpleMatch)) { throw 'GET KEY button missing' }
           if (-not (Select-String -Path 'src/ActivationWindow.xaml.cs' -Pattern 'GetKey_Click' -SimpleMatch)) { throw 'GET KEY handler missing' }
@@ -98,6 +103,7 @@ jobs:
             '- Test key: RIU-TEST-1000-0001',
             '- GET KEY button added',
             '- Appearance/background controls now autosave and save on close',
+            '- xDragonsx on top startup banner is forced on every launch',
             $(if ($customGetKey) { '- GET KEY opens the configured monetized publisher link.' } else { '- GET KEY currently opens Work.ink homepage for testing; set RIU_GET_KEY_URL to your own monetized link.' }),
             '- Bolt Push final coordinate click hardened for Turbo / Instant',
             '- Base: restored 5.22 + Bolts tab'
@@ -122,7 +128,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=riu-v1.0-key-test',
-            'build=riuclicker-1.0-getkey-persistence'
+            'build=riuclicker-1.0-startup-banner'
           ) | Set-Content riu-v1-final-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
