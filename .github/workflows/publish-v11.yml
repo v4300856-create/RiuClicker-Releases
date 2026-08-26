@@ -7,6 +7,7 @@ on:
       - '.github/workflows/publish-v11.yml'
       - '.build/version-11.py'
       - '.build/bolts-third-v1.py'
+      - '.build/dualcoord-lock-v11.py'
       - '.build/startup-banner-v1.py'
       - '.build/settings-save-v1.py'
       - '.build/getkey-v1.py'
@@ -49,6 +50,7 @@ jobs:
           python .build/ui522-hotfix.py
           python .build/bolts-523.py
           python .build/bolts-third-v1.py
+          python .build/dualcoord-lock-v11.py
           python .build/license-v1.py
           python .build/getkey-v1.py
           python .build/settings-save-v1.py
@@ -63,7 +65,7 @@ jobs:
           [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/StartupBannerWindow.xaml' -Raw) | Out-Null
-          foreach ($marker in @('RiuClicker 1.1','CLICK VVV CLICK','RESET COORDS','xDragonsx on top','MouseClickHeld("left"','<Version>1.1.0</Version>')) {
+          foreach ($marker in @('RiuClicker 1.1','CLICK VVV CLICK','FIRST COORDINATE','SECOND COORDINATE','RESET COORDS','CoordinatesLocked','xDragonsx on top','MouseClickHeld("left"','<Version>1.1.0</Version>')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Missing marker: $marker" }
           }
 
@@ -95,7 +97,8 @@ jobs:
             '# RiuClicker 1.1',
             '',
             '- New macro: first locked coordinate click → V V V → second locked coordinate click',
-            '- First and second coordinates lock after setup; RESET COORDS is required to change them',
+            '- First and second coordinates lock automatically after both are selected',
+            '- RESET COORDS is required to change them',
             '- Separate hotkey and Stable / Fast / Turbo / Instant speed modes',
             '- xDragonsx on top startup banner on every launch',
             '- Appearance/background settings persistence',
