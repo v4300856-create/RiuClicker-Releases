@@ -1,5 +1,5 @@
 status=success
-run_id=32879901809
-commit=09d952fdf3bc6e2444db896aa0bb4d9e6ac3e83c
+run_id=32947976252
+commit=60c8182ae40e03e7cb1a506514797ee715352f48
 tag=riu-v1.0-key-test
-build=riuclicker-1.0-getkey-test
+build=riuclicker-1.0-getkey-persistence
