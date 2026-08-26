@@ -1,9 +1,6 @@
 from pathlib import Path
-import os
 
 root = Path('src')
-get_key_url = os.environ.get('RIU_GET_KEY_URL', '').strip() or 'https://loot-link.com/s?zTsiS0pO'
-get_key_url_cs = get_key_url.replace('\\', '\\\\').replace('"', '\\"')
 
 # Add GET KEY button below activation button.
 p = root / 'ActivationWindow.xaml'
@@ -16,17 +13,19 @@ if 'x:Name="GetKeyButton"' not in s:
     s = s.replace(needle, replacement)
 p.write_text(s, encoding='utf-8')
 
-# Open publisher/key gateway link in the default browser.
+# GET KEY never downloads or opens a release asset. It opens a server-created
+# LootLabs session. After the LootLabs postback is confirmed, the server page
+# generates and displays the actual license key.
 p = root / 'ActivationWindow.xaml.cs'
 s = p.read_text(encoding='utf-8')
 if 'using System.Diagnostics;' not in s:
     s = 'using System.Diagnostics;\n' + s
 if 'private void GetKey_Click' not in s:
     marker = '    private async void Activate_Click(object sender, RoutedEventArgs e)\n'
-    method = f'''    private void GetKey_Click(object sender, RoutedEventArgs e)\n    {{\n        const string url = "{get_key_url_cs}";\n        try\n        {{\n            Process.Start(new ProcessStartInfo(url) {{ UseShellExecute = true }});\n            StatusText.Text = "GET KEY page opened in your browser.";\n        }}\n        catch\n        {{\n            StatusText.Text = "Could not open GET KEY page.";\n        }}\n    }}\n\n'''
+    method = '''    private void GetKey_Click(object sender, RoutedEventArgs e)\n    {\n        var url = LicenseService.GetKeyStartUrl();\n        if (string.IsNullOrWhiteSpace(url))\n        {\n            StatusText.Text = "Key server is not configured. GET KEY will not download the clicker.";\n            return;\n        }\n\n        try\n        {\n            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });\n            StatusText.Text = "Key flow opened. Complete LootLabs, then copy the key shown on the final page.";\n        }\n        catch\n        {\n            StatusText.Text = "Could not open GET KEY page.";\n        }\n    }\n\n'''
     if marker not in s:
         raise SystemExit('Activate_Click marker missing')
     s = s.replace(marker, method + marker)
 p.write_text(s, encoding='utf-8')
 
-print('Applied GET KEY button; url=' + get_key_url)
+print('Applied verified GET KEY flow (no release download)')
