@@ -8,7 +8,7 @@ on:
       - '.build/getkey-v1.py'
       - '.build/settings-save-v1.py'
       - '.build/startup-banner-v1.py'
-      - '.build/bolts-third-v1.py'
+      - '.build/dual-coord-bolts-v1.py'
   workflow_dispatch:
 
 permissions:
@@ -48,7 +48,7 @@ jobs:
           python cps520-hotfix.py
           python .build/ui522-hotfix.py
           python .build/bolts-523.py
-          python .build/bolts-third-v1.py
+          python .build/dual-coord-bolts-v1.py
           python .build/license-v1.py
           python .build/getkey-v1.py
           python .build/settings-save-v1.py
@@ -67,8 +67,10 @@ jobs:
           if (-not (Select-String -Path 'src/App.xaml.cs' -Pattern 'new StartupBannerWindow()' -SimpleMatch)) { throw 'Startup banner launch missing' }
           if (-not (Select-String -Path 'src/StartupBannerWindow.xaml' -Pattern 'xDragonsx on top' -SimpleMatch)) { throw 'xDragonsx startup text missing' }
           if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'MouseClickHeld("left"' -SimpleMatch)) { throw 'Held final click missing' }
-          if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'Click VVV Click' -SimpleMatch)) { throw 'Third Bolts macro engine missing' }
-          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'CLICK VVV CLICK' -SimpleMatch)) { throw 'Third Bolts macro UI missing' }
+          if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'DualCoordCoordinate_Changed' -SimpleMatch)) { throw 'Dual-coordinate macro engine missing' }
+          if (-not (Select-String -Path 'src/MainWindow.Bolts.cs' -Pattern 'CoordinatesLocked' -SimpleMatch)) { throw 'Dual-coordinate lock missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'DOUBLE COORD VVV' -SimpleMatch)) { throw 'Dual-coordinate macro UI missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'RESET COORDS' -SimpleMatch)) { throw 'Dual-coordinate reset missing' }
           if (-not (Select-String -Path 'src/ActivationWindow.xaml' -Pattern 'Content="GET KEY"' -SimpleMatch)) { throw 'GET KEY button missing' }
           if (-not (Select-String -Path 'src/ActivationWindow.xaml.cs' -Pattern 'GetKey_Click' -SimpleMatch)) { throw 'GET KEY handler missing' }
           if (-not (Select-String -Path 'src/MainWindow.xaml.cs' -Pattern 'InstallPersistenceAutosave();' -SimpleMatch)) { throw 'Persistence hook missing' }
@@ -106,10 +108,12 @@ jobs:
             '- Mandatory key window before the app opens',
             '- Test key: RIU-TEST-1000-0001',
             '- GET KEY button added',
-            '- Appearance/background controls now autosave and save on close',
+            '- Appearance/background controls autosave and save on close',
             '- xDragonsx on top startup banner is forced on every launch',
-            '- New Bolts macro: saved-coordinate click → V V V → saved-coordinate click',
-            '- New macro has its own hotkey, coordinate and Stable / Fast / Turbo / Instant speeds',
+            '- New Double Coord VVV macro: first coordinate click → V V V → second coordinate click',
+            '- First/second exact X/Y values lock after both are selected',
+            '- RESET COORDS is required before changing those two points',
+            '- Double Coord has its own hotkey and Stable / Fast / Turbo / Instant speeds',
             $(if ($customGetKey) { '- GET KEY opens the configured monetized publisher link.' } else { '- GET KEY currently opens Work.ink homepage for testing; set RIU_GET_KEY_URL to your own monetized link.' }),
             '- Bolt Push final coordinate click hardened for Turbo / Instant',
             '- Base: restored 5.22 + Bolts tab'
@@ -134,7 +138,7 @@ jobs:
             "run_id=${{ github.run_id }}",
             "commit=${{ github.sha }}",
             'tag=riu-v1.0-key-test',
-            'build=riuclicker-1.0-third-bolts-macro'
+            'build=riuclicker-1.0-dualcoord-locked'
           ) | Set-Content riu-v1-final-status.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
