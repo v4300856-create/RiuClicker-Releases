@@ -1048,15 +1048,15 @@ Themes = {
         Stars = true
     },
     Premium = {
-        Main = Color3.fromRGB(186, 140, 255),
+        Main = Color3.fromRGB(74, 222, 180),
         Gradient = true,
         Colors = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 80, 200)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(186, 140, 255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 180, 230))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 212, 191)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(56, 189, 248)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(129, 140, 248))
         }),
-        Background = Color3.fromRGB(10, 8, 16),
-        AccentGlow = Color3.fromRGB(186, 140, 255),
+        Background = Color3.fromRGB(7, 11, 18),
+        AccentGlow = Color3.fromRGB(56, 189, 248),
     }
 }
 
@@ -1653,13 +1653,13 @@ do
 -- // UI Root // --
 pcall(function()
     for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "ASTERHub" then
+        if gui:IsA("ScreenGui") and gui.Name == "BoogaHub" then
             gui:Destroy()
         end
     end
 end)
 screenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-screenGui.Name = "ASTERHub"
+screenGui.Name = "BoogaHub"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -1704,7 +1704,7 @@ uiCorner(sidebar, UI.Radius.lg)
 uiStroke(sidebar, 1, 0.65)
 
 sidebarTitle = Instance.new("TextLabel", sidebar)
-sidebarTitle.Text = "ASTER HUB"
+sidebarTitle.Text = "BOOGA HUB"
 sidebarTitle.Size = UDim2.new(1, -16, 0, 22)
 sidebarTitle.Position = UDim2.fromOffset(14, 12)
 sidebarTitle.Font = UI.FontTitle
@@ -1714,7 +1714,7 @@ sidebarTitle.TextXAlignment = Enum.TextXAlignment.Left
 applyHollowEffect(sidebarTitle, 1.2, true)
 
 sidebarSub = Instance.new("TextLabel", sidebar)
-sidebarSub.Text = "Booga Booga Free"
+sidebarSub.Text = "Reborn • Free"
 sidebarSub.Size = UDim2.new(1, -16, 0, 14)
 sidebarSub.Position = UDim2.fromOffset(14, 34)
 sidebarSub.Font = UI.FontLabel
@@ -1735,7 +1735,7 @@ toggleBtn = Instance.new("TextButton", screenGui)
 toggleBtn.Size = UDim2.fromOffset(56, 56)
 toggleBtn.Position = UDim2.new(0, 14, 0.5, -28)
 toggleBtn.BackgroundColor3 = UI.Surface.Card
-toggleBtn.Text = "A"
+toggleBtn.Text = "B"
 toggleBtn.Font = UI.FontTitle
 toggleBtn.TextSize = 20
 toggleBtn.ZIndex = 100
@@ -20010,14 +20010,14 @@ ASTER.Tabs = {}
 
 -- Create tabs directly without a function wrapper to avoid local limit issues
 ASTER.Tabs.Main = Window:AddTab({Title = "Gold & Paths", Icon = "rbxassetid://101422321126986"})
-ASTER.Tabs.Pickup = Window:AddTab({Title = "Loot & Chests", Icon = "rbxassetid://10709769841"})
-ASTER.Tabs.Combat = Window:AddTab({Title = "Combat / PvP", Icon = "rbxassetid://10734975692"})
 InitializePinchConfig()
 ASTER.Tabs.Automation = Window:AddTab({Title = "Automation", Icon = "rbxassetid://98315335875448"})
 ASTER.Tabs.Planting = Window:AddTab({Title = "Farming", Icon = "rbxassetid://10734965572"})
+ASTER.Tabs.Pickup = Window:AddTab({Title = "Loot & Chests", Icon = "rbxassetid://10709769841"})
+ASTER.Tabs.Combat = Window:AddTab({Title = "Combat / PvP", Icon = "rbxassetid://10734975692"})
 ASTER.Tabs.Visuals = Window:AddTab({Title = "ESP / Visuals", Icon = "rbxassetid://122375159588547"})
-ASTER.Tabs.Settings = Window:AddTab({Title = "Settings", Icon = "rbxassetid://10734950309"})
 ASTER.Tabs.Config = Window:AddTab({Title = "Configs", Icon = "rbxassetid://92734085107015"})
+ASTER.Tabs.Settings = Window:AddTab({Title = "Settings", Icon = "rbxassetid://10734950309"})
 
 
 -- Temporarily disable CanCollide/CanQuery on Resources / Deployables in the shot path
