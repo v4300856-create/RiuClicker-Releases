@@ -1,5 +1,5 @@
 status=failure
-run_id=33035581993
-commit=038c3ea3dcbb80e87217f401a263582c856398c5
+run_id=33048120487
+commit=779a2b262b362970dabb2e64b85681cf0349c906
 tag=riu-v1.1
-build=riuclicker-1.1-real-key-system
+build=riuclicker-1.1-supabase-lootlabs
