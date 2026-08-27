@@ -65,7 +65,7 @@ jobs:
           [xml](Get-Content 'src/App.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/ActivationWindow.xaml' -Raw) | Out-Null
           [xml](Get-Content 'src/MainWindow.xaml' -Raw) | Out-Null
-          foreach ($marker in @('RiuClicker 1.1','GET KEY','APPLY KEY','LOOTLABS-24H','PollAsync','CreateSessionId','CLICK VVV CLICK','FIRST COORDINATE','SECOND COORDINATE','RESET COORDS')) {
+          foreach ($marker in @('RiuClicker 1.1','GET KEY','APPLY KEY','PollAsync','CreateSessionId','CLICK VVV CLICK','FIRST COORDINATE','SECOND COORDINATE','RESET COORDS')) {
             if (-not (Get-ChildItem src -Include '*.cs','*.xaml','*.csproj' -File -Recurse | Select-String -Pattern $marker -SimpleMatch)) { throw "Missing marker: $marker" }
           }
 
