@@ -1,3 +1,222 @@
+-- // BOOGA HUB KEY GATE (preview) // --
+function __BoogaHubKeyGate()
+    local env=(type(getgenv)=="function" and getgenv()) or _G
+    local HttpService=game:GetService("HttpService")
+    local TweenService=game:GetService("TweenService")
+    local CoreGui=game:GetService("CoreGui")
+    env.__BOOGA_KEY_CONFIG=env.__BOOGA_KEY_CONFIG or {
+        PreviewKey="BOOGA-FREE",
+        DurationSeconds=86400,
+        GetKeyUrl="https://loot-link.com/s?zTsiS0pO",
+        SavePath="BOOGA_HUB/key.json"
+    }
+    local cfg=env.__BOOGA_KEY_CONFIG
+
+    local function loadSaved()
+        if type(isfile)~="function" or type(readfile)~="function" then return nil end
+        local ok,data=pcall(function()
+            if not isfile(cfg.SavePath) then return nil end
+            return HttpService:JSONDecode(readfile(cfg.SavePath))
+        end)
+        if ok and type(data)=="table" then return data end
+    end
+    local function saveKey(key,expiresAt)
+        if type(writefile)~="function" then return end
+        pcall(function()
+            if type(makefolder)=="function" then
+                if type(isfolder)=="function" then
+                    if not isfolder("BOOGA_HUB") then makefolder("BOOGA_HUB") end
+                else
+                    makefolder("BOOGA_HUB")
+                end
+            end
+            writefile(cfg.SavePath,HttpService:JSONEncode({key=key,expiresAt=expiresAt}))
+        end)
+    end
+    local saved=loadSaved()
+    if saved and tonumber(saved.expiresAt or 0)>os.time() and tostring(saved.key or "")~="" then
+        env.__BOOGA_KEY=tostring(saved.key)
+        env.__BOOGA_KEY_EXPIRES_AT=tonumber(saved.expiresAt)
+        env.__BOOGA_KEY_AUTHORIZED=true
+        return
+    end
+
+    pcall(function()
+        local old=CoreGui:FindFirstChild("BoogaHubKeySystem")
+        if old then old:Destroy() end
+    end)
+
+    local gui=Instance.new("ScreenGui")
+    gui.Name="BoogaHubKeySystem"
+    gui.ResetOnSpawn=false
+    gui.IgnoreGuiInset=true
+    gui.DisplayOrder=999999
+    gui.Parent=CoreGui
+
+    local bg=Instance.new("Frame",gui)
+    bg.Size=UDim2.fromScale(1,1)
+    bg.BackgroundColor3=Color3.fromRGB(3,6,12)
+    bg.BackgroundTransparency=0.12
+    bg.BorderSizePixel=0
+
+    local card=Instance.new("Frame",gui)
+    card.AnchorPoint=Vector2.new(.5,.5)
+    card.Position=UDim2.fromScale(.5,.5)
+    card.Size=UDim2.fromOffset(430,318)
+    card.BackgroundColor3=Color3.fromRGB(9,14,23)
+    card.BorderSizePixel=0
+    Instance.new("UICorner",card).CornerRadius=UDim.new(0,18)
+    local st=Instance.new("UIStroke",card)
+    st.Thickness=1.4
+    st.Transparency=.15
+    st.Color=Color3.fromRGB(72,220,190)
+    local gr=Instance.new("UIGradient",st)
+    gr.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(45,212,191)),
+        ColorSequenceKeypoint.new(.5,Color3.fromRGB(56,189,248)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(129,140,248))
+    })
+
+    local top=Instance.new("Frame",card)
+    top.Size=UDim2.new(1,0,0,86)
+    top.BackgroundColor3=Color3.fromRGB(12,20,32)
+    top.BorderSizePixel=0
+    Instance.new("UICorner",top).CornerRadius=UDim.new(0,18)
+
+    local logo=Instance.new("TextLabel",top)
+    logo.Position=UDim2.fromOffset(22,17)
+    logo.Size=UDim2.fromOffset(52,52)
+    logo.BackgroundColor3=Color3.fromRGB(24,35,51)
+    logo.BorderSizePixel=0
+    logo.Text="B"
+    logo.TextColor3=Color3.fromRGB(110,231,209)
+    logo.Font=Enum.Font.GothamBold
+    logo.TextSize=28
+    Instance.new("UICorner",logo).CornerRadius=UDim.new(0,14)
+
+    local title=Instance.new("TextLabel",top)
+    title.Position=UDim2.fromOffset(88,18)
+    title.Size=UDim2.new(1,-110,0,28)
+    title.BackgroundTransparency=1
+    title.Text="BOOGA HUB"
+    title.TextColor3=Color3.fromRGB(245,248,255)
+    title.Font=Enum.Font.GothamBold
+    title.TextSize=22
+    title.TextXAlignment=Enum.TextXAlignment.Left
+
+    local sub=Instance.new("TextLabel",top)
+    sub.Position=UDim2.fromOffset(89,48)
+    sub.Size=UDim2.new(1,-110,0,18)
+    sub.BackgroundTransparency=1
+    sub.Text="Free access • 24-hour key"
+    sub.TextColor3=Color3.fromRGB(139,154,177)
+    sub.Font=Enum.Font.GothamMedium
+    sub.TextSize=12
+    sub.TextXAlignment=Enum.TextXAlignment.Left
+
+    local input=Instance.new("TextBox",card)
+    input.Position=UDim2.fromOffset(22,112)
+    input.Size=UDim2.new(1,-44,0,48)
+    input.BackgroundColor3=Color3.fromRGB(15,23,35)
+    input.BorderSizePixel=0
+    input.PlaceholderText="Enter your access key..."
+    input.PlaceholderColor3=Color3.fromRGB(105,119,141)
+    input.Text=""
+    input.TextColor3=Color3.fromRGB(235,241,250)
+    input.ClearTextOnFocus=false
+    input.Font=Enum.Font.GothamMedium
+    input.TextSize=14
+    Instance.new("UICorner",input).CornerRadius=UDim.new(0,12)
+    local pad=Instance.new("UIPadding",input)
+    pad.PaddingLeft=UDim.new(0,15)
+    pad.PaddingRight=UDim.new(0,15)
+
+    local status=Instance.new("TextLabel",card)
+    status.Position=UDim2.fromOffset(22,168)
+    status.Size=UDim2.new(1,-44,0,22)
+    status.BackgroundTransparency=1
+    status.Text="Get a free key, then paste it above."
+    status.TextColor3=Color3.fromRGB(139,154,177)
+    status.Font=Enum.Font.GothamMedium
+    status.TextSize=12
+    status.TextXAlignment=Enum.TextXAlignment.Left
+
+    local function button(text,x,primary)
+        local b=Instance.new("TextButton",card)
+        b.Position=UDim2.fromOffset(x,204)
+        b.Size=UDim2.fromOffset(184,48)
+        b.BackgroundColor3=primary and Color3.fromRGB(35,181,160) or Color3.fromRGB(18,28,42)
+        b.BorderSizePixel=0
+        b.Text=text
+        b.TextColor3=Color3.fromRGB(245,249,255)
+        b.Font=Enum.Font.GothamBold
+        b.TextSize=13
+        b.AutoButtonColor=false
+        Instance.new("UICorner",b).CornerRadius=UDim.new(0,12)
+        return b
+    end
+    local getBtn=button("GET KEY",22,false)
+    local checkBtn=button("CHECK KEY",224,true)
+
+    local footer=Instance.new("TextLabel",card)
+    footer.Position=UDim2.fromOffset(22,270)
+    footer.Size=UDim2.new(1,-44,0,28)
+    footer.BackgroundTransparency=1
+    footer.Text="Preview validator • Luarmor-ready"
+    footer.TextColor3=Color3.fromRGB(93,109,132)
+    footer.Font=Enum.Font.Gotham
+    footer.TextSize=11
+    footer.TextXAlignment=Enum.TextXAlignment.Center
+
+    getBtn.MouseButton1Click:Connect(function()
+        if type(setclipboard)=="function" then
+            pcall(setclipboard,cfg.GetKeyUrl)
+            status.Text="Get-key link copied to clipboard."
+            status.TextColor3=Color3.fromRGB(94,214,194)
+        else
+            status.Text="Clipboard is not supported by this executor."
+            status.TextColor3=Color3.fromRGB(250,190,95)
+        end
+    end)
+
+    checkBtn.MouseButton1Click:Connect(function()
+        local typed=tostring(input.Text or ""):gsub("^%s+",""):gsub("%s+$","")
+        checkBtn.Text="CHECKING..."
+        if typed==tostring(cfg.PreviewKey) then
+            local expires=os.time()+(tonumber(cfg.DurationSeconds) or 86400)
+            env.__BOOGA_KEY=typed
+            env.__BOOGA_KEY_EXPIRES_AT=expires
+            env.__BOOGA_KEY_AUTHORIZED=true
+            saveKey(typed,expires)
+            status.Text="Access granted • 24h remaining"
+            status.TextColor3=Color3.fromRGB(94,230,168)
+            checkBtn.Text="SUCCESS"
+            task.wait(.45)
+            TweenService:Create(card,TweenInfo.new(.2),{BackgroundTransparency=1,Size=UDim2.fromOffset(400,290)}):Play()
+            TweenService:Create(bg,TweenInfo.new(.2),{BackgroundTransparency=1}):Play()
+            task.wait(.22)
+            gui:Destroy()
+        else
+            status.Text="Invalid key. Preview key: BOOGA-FREE"
+            status.TextColor3=Color3.fromRGB(255,103,120)
+            checkBtn.Text="TRY AGAIN"
+        end
+    end)
+
+    card.Size=UDim2.fromOffset(390,288)
+    card.BackgroundTransparency=1
+    TweenService:Create(card,TweenInfo.new(.28,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
+        Size=UDim2.fromOffset(430,318),
+        BackgroundTransparency=0
+    }):Play()
+
+    while not env.__BOOGA_KEY_AUTHORIZED do task.wait(.1) end
+end
+
+__BoogaHubKeyGate()
+__BoogaHubKeyGate=nil
+-- // END BOOGA HUB KEY GATE // --
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 TweenService = game:GetService("TweenService")
@@ -1048,15 +1267,15 @@ Themes = {
         Stars = true
     },
     Premium = {
-        Main = Color3.fromRGB(186, 140, 255),
+        Main = Color3.fromRGB(74, 222, 180),
         Gradient = true,
         Colors = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 80, 200)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(186, 140, 255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 180, 230))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 212, 191)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(56, 189, 248)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(129, 140, 248))
         }),
-        Background = Color3.fromRGB(10, 8, 16),
-        AccentGlow = Color3.fromRGB(186, 140, 255),
+        Background = Color3.fromRGB(7, 11, 18),
+        AccentGlow = Color3.fromRGB(56, 189, 248),
     }
 }
 
@@ -1653,13 +1872,13 @@ do
 -- // UI Root // --
 pcall(function()
     for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name == "ASTERHub" then
+        if gui:IsA("ScreenGui") and gui.Name == "BoogaHub" then
             gui:Destroy()
         end
     end
 end)
 screenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-screenGui.Name = "ASTERHub"
+screenGui.Name = "BoogaHub"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -1704,7 +1923,7 @@ uiCorner(sidebar, UI.Radius.lg)
 uiStroke(sidebar, 1, 0.65)
 
 sidebarTitle = Instance.new("TextLabel", sidebar)
-sidebarTitle.Text = "ASTER HUB"
+sidebarTitle.Text = "BOOGA HUB"
 sidebarTitle.Size = UDim2.new(1, -16, 0, 22)
 sidebarTitle.Position = UDim2.fromOffset(14, 12)
 sidebarTitle.Font = UI.FontTitle
@@ -1714,7 +1933,7 @@ sidebarTitle.TextXAlignment = Enum.TextXAlignment.Left
 applyHollowEffect(sidebarTitle, 1.2, true)
 
 sidebarSub = Instance.new("TextLabel", sidebar)
-sidebarSub.Text = "Booga Booga Free"
+sidebarSub.Text = "Reborn • Free"
 sidebarSub.Size = UDim2.new(1, -16, 0, 14)
 sidebarSub.Position = UDim2.fromOffset(14, 34)
 sidebarSub.Font = UI.FontLabel
@@ -1723,9 +1942,38 @@ sidebarSub.TextColor3 = UI.Surface.Muted
 sidebarSub.BackgroundTransparency = 1
 sidebarSub.TextXAlignment = Enum.TextXAlignment.Left
 
+local boogaKeyStatus = Instance.new("TextLabel", sidebar)
+boogaKeyStatus.Name = "KeyStatus"
+boogaKeyStatus.Text = "KEY • checking..."
+boogaKeyStatus.Size = UDim2.new(1, -16, 0, 14)
+boogaKeyStatus.Position = UDim2.fromOffset(14, 48)
+boogaKeyStatus.Font = UI.FontLabel
+boogaKeyStatus.TextSize = 10
+boogaKeyStatus.TextColor3 = Color3.fromRGB(94, 214, 194)
+boogaKeyStatus.BackgroundTransparency = 1
+boogaKeyStatus.TextXAlignment = Enum.TextXAlignment.Left
+task.spawn(function()
+    while boogaKeyStatus and boogaKeyStatus.Parent do
+        local env = (type(getgenv) == "function" and getgenv()) or _G
+        local expires = tonumber(env.__BOOGA_KEY_EXPIRES_AT or 0)
+        local left = math.max(0, expires - os.time())
+        local h = math.floor(left / 3600)
+        local m = math.floor((left % 3600) / 60)
+        if expires <= 0 then
+            boogaKeyStatus.Text = "KEY • preview"
+        elseif left <= 0 then
+            boogaKeyStatus.Text = "KEY • expired"
+            boogaKeyStatus.TextColor3 = Color3.fromRGB(255, 103, 120)
+        else
+            boogaKeyStatus.Text = string.format("KEY • %02dh %02dm left", h, m)
+        end
+        task.wait(30)
+    end
+end)
+
 sidebarLine = Instance.new("Frame", sidebar)
 sidebarLine.Size = UDim2.new(1, -24, 0, 1)
-sidebarLine.Position = UDim2.new(0, 12, 0, 54)
+sidebarLine.Position = UDim2.new(0, 12, 0, 66)
 sidebarLine.BackgroundColor3 = Color3.new(1, 1, 1)
 sidebarLine.BackgroundTransparency = 0.5
 sidebarLine.BorderSizePixel = 0
@@ -1735,7 +1983,7 @@ toggleBtn = Instance.new("TextButton", screenGui)
 toggleBtn.Size = UDim2.fromOffset(56, 56)
 toggleBtn.Position = UDim2.new(0, 14, 0.5, -28)
 toggleBtn.BackgroundColor3 = UI.Surface.Card
-toggleBtn.Text = "A"
+toggleBtn.Text = "B"
 toggleBtn.Font = UI.FontTitle
 toggleBtn.TextSize = 20
 toggleBtn.ZIndex = 100
@@ -20010,14 +20258,14 @@ ASTER.Tabs = {}
 
 -- Create tabs directly without a function wrapper to avoid local limit issues
 ASTER.Tabs.Main = Window:AddTab({Title = "Gold & Paths", Icon = "rbxassetid://101422321126986"})
-ASTER.Tabs.Pickup = Window:AddTab({Title = "Loot & Chests", Icon = "rbxassetid://10709769841"})
-ASTER.Tabs.Combat = Window:AddTab({Title = "Combat / PvP", Icon = "rbxassetid://10734975692"})
 InitializePinchConfig()
 ASTER.Tabs.Automation = Window:AddTab({Title = "Automation", Icon = "rbxassetid://98315335875448"})
 ASTER.Tabs.Planting = Window:AddTab({Title = "Farming", Icon = "rbxassetid://10734965572"})
+ASTER.Tabs.Pickup = Window:AddTab({Title = "Loot & Chests", Icon = "rbxassetid://10709769841"})
+ASTER.Tabs.Combat = Window:AddTab({Title = "Combat / PvP", Icon = "rbxassetid://10734975692"})
 ASTER.Tabs.Visuals = Window:AddTab({Title = "ESP / Visuals", Icon = "rbxassetid://122375159588547"})
-ASTER.Tabs.Settings = Window:AddTab({Title = "Settings", Icon = "rbxassetid://10734950309"})
 ASTER.Tabs.Config = Window:AddTab({Title = "Configs", Icon = "rbxassetid://92734085107015"})
+ASTER.Tabs.Settings = Window:AddTab({Title = "Settings", Icon = "rbxassetid://10734950309"})
 
 
 -- Temporarily disable CanCollide/CanQuery on Resources / Deployables in the shot path
