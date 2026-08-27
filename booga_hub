@@ -1,3 +1,185 @@
+-- // BOOGA HUB FREE KEY SYSTEM // --
+function __BoogaHubKeyGate()
+    local env = (type(getgenv) == "function" and getgenv()) or _G
+    local HttpService = game:GetService("HttpService")
+    local CoreGui = game:GetService("CoreGui")
+    local SAVE_FOLDER, SAVE_PATH = "BOOGA_HUB", "BOOGA_HUB/key.json"
+    local FREE_KEY, KEY_DURATION = "BOOGA-FREE", 86400
+
+    local function saveSession(key, expiresAt)
+        if type(makefolder) == "function" then
+            pcall(function()
+                if type(isfolder) == "function" then
+                    if not isfolder(SAVE_FOLDER) then makefolder(SAVE_FOLDER) end
+                else
+                    makefolder(SAVE_FOLDER)
+                end
+            end)
+        end
+        if type(writefile) == "function" then
+            pcall(function()
+                writefile(SAVE_PATH, HttpService:JSONEncode({key=key, expiresAt=expiresAt}))
+            end)
+        end
+    end
+
+    local function loadSession()
+        if type(isfile) ~= "function" or type(readfile) ~= "function" then return nil end
+        local ok, data = pcall(function()
+            if not isfile(SAVE_PATH) then return nil end
+            return HttpService:JSONDecode(readfile(SAVE_PATH))
+        end)
+        return ok and type(data) == "table" and data or nil
+    end
+
+    local function authorize(key, expiresAt)
+        env.__BOOGA_KEY = key
+        env.__BOOGA_KEY_EXPIRES_AT = expiresAt
+        env.__BOOGA_KEY_AUTHORIZED = true
+        saveSession(key, expiresAt)
+    end
+
+    local saved = loadSession()
+    if saved and tostring(saved.key or "") == FREE_KEY and tonumber(saved.expiresAt or 0) > os.time() then
+        authorize(FREE_KEY, tonumber(saved.expiresAt))
+        return true
+    end
+
+    pcall(function()
+        local old = CoreGui:FindFirstChild("BoogaHubKeySystem")
+        if old then old:Destroy() end
+    end)
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "BoogaHubKeySystem"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999999
+    gui.Parent = CoreGui
+
+    local dim = Instance.new("Frame", gui)
+    dim.Size = UDim2.fromScale(1,1)
+    dim.BackgroundColor3 = Color3.fromRGB(3,6,12)
+    dim.BackgroundTransparency = 0.15
+    dim.BorderSizePixel = 0
+
+    local card = Instance.new("Frame", gui)
+    card.AnchorPoint = Vector2.new(0.5,0.5)
+    card.Position = UDim2.fromScale(0.5,0.5)
+    card.Size = UDim2.fromOffset(430,310)
+    card.BackgroundColor3 = Color3.fromRGB(9,14,23)
+    card.BorderSizePixel = 0
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0,18)
+
+    local stroke = Instance.new("UIStroke", card)
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(62,214,190)
+    stroke.Transparency = 0.15
+
+    local title = Instance.new("TextLabel", card)
+    title.Position = UDim2.fromOffset(22,20)
+    title.Size = UDim2.new(1,-44,0,30)
+    title.BackgroundTransparency = 1
+    title.Text = "BOOGA HUB"
+    title.TextColor3 = Color3.fromRGB(245,248,255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 24
+    title.TextXAlignment = Enum.TextXAlignment.Left
+
+    local sub = Instance.new("TextLabel", card)
+    sub.Position = UDim2.fromOffset(22,52)
+    sub.Size = UDim2.new(1,-44,0,20)
+    sub.BackgroundTransparency = 1
+    sub.Text = "Free key access • valid for 24 hours"
+    sub.TextColor3 = Color3.fromRGB(137,153,176)
+    sub.Font = Enum.Font.GothamMedium
+    sub.TextSize = 12
+    sub.TextXAlignment = Enum.TextXAlignment.Left
+
+    local input = Instance.new("TextBox", card)
+    input.Position = UDim2.fromOffset(22,100)
+    input.Size = UDim2.new(1,-44,0,48)
+    input.BackgroundColor3 = Color3.fromRGB(15,23,35)
+    input.BorderSizePixel = 0
+    input.ClearTextOnFocus = false
+    input.PlaceholderText = "Paste your key here..."
+    input.PlaceholderColor3 = Color3.fromRGB(103,118,140)
+    input.TextColor3 = Color3.fromRGB(240,245,252)
+    input.Font = Enum.Font.GothamMedium
+    input.TextSize = 14
+    Instance.new("UICorner", input).CornerRadius = UDim.new(0,12)
+    local pad = Instance.new("UIPadding", input)
+    pad.PaddingLeft = UDim.new(0,14)
+    pad.PaddingRight = UDim.new(0,14)
+
+    local status = Instance.new("TextLabel", card)
+    status.Position = UDim2.fromOffset(22,157)
+    status.Size = UDim2.new(1,-44,0,22)
+    status.BackgroundTransparency = 1
+    status.Text = "Press GET KEY, then CHECK KEY."
+    status.TextColor3 = Color3.fromRGB(137,153,176)
+    status.Font = Enum.Font.GothamMedium
+    status.TextSize = 12
+    status.TextXAlignment = Enum.TextXAlignment.Left
+
+    local function button(text, x, color)
+        local b = Instance.new("TextButton", card)
+        b.Position = UDim2.fromOffset(x,198)
+        b.Size = UDim2.fromOffset(184,48)
+        b.BackgroundColor3 = color
+        b.BorderSizePixel = 0
+        b.AutoButtonColor = true
+        b.Text = text
+        b.TextColor3 = Color3.fromRGB(245,249,255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 13
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0,12)
+        return b
+    end
+
+    local getBtn = button("GET KEY", 22, Color3.fromRGB(18,28,42))
+    local checkBtn = button("CHECK KEY", 224, Color3.fromRGB(36,181,159))
+
+    local footer = Instance.new("TextLabel", card)
+    footer.Position = UDim2.fromOffset(22,263)
+    footer.Size = UDim2.new(1,-44,0,24)
+    footer.BackgroundTransparency = 1
+    footer.Text = "Booga Hub Free Key System"
+    footer.TextColor3 = Color3.fromRGB(91,106,129)
+    footer.Font = Enum.Font.Gotham
+    footer.TextSize = 11
+
+    getBtn.MouseButton1Click:Connect(function()
+        input.Text = FREE_KEY
+        if type(setclipboard) == "function" then pcall(setclipboard, FREE_KEY) end
+        status.Text = "Free key inserted."
+        status.TextColor3 = Color3.fromRGB(95,220,197)
+    end)
+
+    checkBtn.MouseButton1Click:Connect(function()
+        local typed = tostring(input.Text or ""):gsub("^%s+",""):gsub("%s+$","")
+        if typed == FREE_KEY then
+            authorize(FREE_KEY, os.time() + KEY_DURATION)
+            status.Text = "Access granted • 24 hours"
+            status.TextColor3 = Color3.fromRGB(96,230,169)
+            checkBtn.Text = "SUCCESS"
+            task.wait(0.35)
+            gui:Destroy()
+        else
+            status.Text = "Invalid key."
+            status.TextColor3 = Color3.fromRGB(255,103,120)
+            checkBtn.Text = "TRY AGAIN"
+        end
+    end)
+
+    while not env.__BOOGA_KEY_AUTHORIZED do task.wait(0.1) end
+    return true
+end
+
+__BoogaHubKeyGate()
+__BoogaHubKeyGate = nil
+-- // END BOOGA HUB FREE KEY SYSTEM // --
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 TweenService = game:GetService("TweenService")
@@ -1723,9 +1905,30 @@ sidebarSub.TextColor3 = UI.Surface.Muted
 sidebarSub.BackgroundTransparency = 1
 sidebarSub.TextXAlignment = Enum.TextXAlignment.Left
 
+local boogaKeyStatus = Instance.new("TextLabel", sidebar)
+boogaKeyStatus.Name = "KeyStatus"
+boogaKeyStatus.Size = UDim2.new(1, -16, 0, 14)
+boogaKeyStatus.Position = UDim2.fromOffset(14, 48)
+boogaKeyStatus.BackgroundTransparency = 1
+boogaKeyStatus.Font = UI.FontLabel
+boogaKeyStatus.TextSize = 10
+boogaKeyStatus.TextXAlignment = Enum.TextXAlignment.Left
+boogaKeyStatus.TextColor3 = Color3.fromRGB(95, 220, 197)
+task.spawn(function()
+    while boogaKeyStatus and boogaKeyStatus.Parent do
+        local env = (type(getgenv) == "function" and getgenv()) or _G
+        local expires = tonumber(env.__BOOGA_KEY_EXPIRES_AT or 0)
+        local left = math.max(0, expires - os.time())
+        local h = math.floor(left / 3600)
+        local m = math.floor((left % 3600) / 60)
+        boogaKeyStatus.Text = left > 0 and string.format("KEY • %02dh %02dm left", h, m) or "KEY • expired"
+        task.wait(30)
+    end
+end)
+
 sidebarLine = Instance.new("Frame", sidebar)
 sidebarLine.Size = UDim2.new(1, -24, 0, 1)
-sidebarLine.Position = UDim2.new(0, 12, 0, 54)
+sidebarLine.Position = UDim2.new(0, 12, 0, 66)
 sidebarLine.BackgroundColor3 = Color3.new(1, 1, 1)
 sidebarLine.BackgroundTransparency = 0.5
 sidebarLine.BorderSizePixel = 0
