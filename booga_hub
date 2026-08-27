@@ -1,48 +1,62 @@
--- // BOOGA HUB FREE KEY SYSTEM // --
+-- // BOOGA HUB LOOTLABS KEY SYSTEM // --
 function __BoogaHubKeyGate()
     local env = (type(getgenv) == "function" and getgenv()) or _G
     local HttpService = game:GetService("HttpService")
+    local TweenService = game:GetService("TweenService")
     local CoreGui = game:GetService("CoreGui")
-    local SAVE_FOLDER, SAVE_PATH = "BOOGA_HUB", "BOOGA_HUB/key.json"
-    local FREE_KEY, KEY_DURATION = "BOOGA-FREE", 86400
+    local API = "https://rpbjeexhbanaavazfmpo.supabase.co/functions/v1/booga-key"
+    local SAVE_FOLDER = "BOOGA_HUB"
+    local SAVE_PATH = SAVE_FOLDER .. "/key.json"
 
-    local function saveSession(key, expiresAt)
-        if type(makefolder) == "function" then
-            pcall(function()
-                if type(isfolder) == "function" then
-                    if not isfolder(SAVE_FOLDER) then makefolder(SAVE_FOLDER) end
-                else
-                    makefolder(SAVE_FOLDER)
-                end
-            end)
-        end
-        if type(writefile) == "function" then
-            pcall(function()
-                writefile(SAVE_PATH, HttpService:JSONEncode({key=key, expiresAt=expiresAt}))
-            end)
-        end
+    local function ensureFolder()
+        if type(makefolder) ~= "function" then return end
+        pcall(function()
+            if type(isfolder) == "function" then
+                if not isfolder(SAVE_FOLDER) then makefolder(SAVE_FOLDER) end
+            else
+                makefolder(SAVE_FOLDER)
+            end
+        end)
     end
 
-    local function loadSession()
+    local function loadSaved()
         if type(isfile) ~= "function" or type(readfile) ~= "function" then return nil end
         local ok, data = pcall(function()
             if not isfile(SAVE_PATH) then return nil end
             return HttpService:JSONDecode(readfile(SAVE_PATH))
         end)
-        return ok and type(data) == "table" and data or nil
+        if ok and type(data) == "table" then return data end
+        return nil
     end
 
-    local function authorize(key, expiresAt)
+    local function saveSaved(data)
+        ensureFolder()
+        if type(writefile) ~= "function" then return end
+        pcall(function() writefile(SAVE_PATH, HttpService:JSONEncode(data)) end)
+    end
+
+    local function apiGet(url)
+        local ok, body = pcall(function() return game:HttpGet(url) end)
+        if not ok or type(body) ~= "string" then return nil end
+        local ok2, data = pcall(function() return HttpService:JSONDecode(body) end)
+        if ok2 and type(data) == "table" then return data end
+        return nil
+    end
+
+    local function authorize(key, remaining)
         env.__BOOGA_KEY = key
-        env.__BOOGA_KEY_EXPIRES_AT = expiresAt
         env.__BOOGA_KEY_AUTHORIZED = true
-        saveSession(key, expiresAt)
+        env.__BOOGA_KEY_EXPIRES_AT = os.time() + math.max(0, tonumber(remaining) or 0)
+        saveSaved({key=key, expiresAt=env.__BOOGA_KEY_EXPIRES_AT})
     end
 
-    local saved = loadSession()
-    if saved and tostring(saved.key or "") == FREE_KEY and tonumber(saved.expiresAt or 0) > os.time() then
-        authorize(FREE_KEY, tonumber(saved.expiresAt))
-        return true
+    local saved = loadSaved()
+    if saved and tostring(saved.key or "") ~= "" then
+        local v = apiGet(API .. "/validate?key=" .. HttpService:UrlEncode(tostring(saved.key)))
+        if v and v.valid == true and tonumber(v.remaining_seconds or 0) > 0 then
+            authorize(tostring(saved.key), tonumber(v.remaining_seconds))
+            return true
+        end
     end
 
     pcall(function()
@@ -55,30 +69,39 @@ function __BoogaHubKeyGate()
     gui.ResetOnSpawn = false
     gui.IgnoreGuiInset = true
     gui.DisplayOrder = 999999
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = CoreGui
 
-    local dim = Instance.new("Frame", gui)
+    local dim = Instance.new("Frame")
     dim.Size = UDim2.fromScale(1,1)
     dim.BackgroundColor3 = Color3.fromRGB(3,6,12)
     dim.BackgroundTransparency = 0.15
     dim.BorderSizePixel = 0
+    dim.Parent = gui
 
-    local card = Instance.new("Frame", gui)
+    local card = Instance.new("Frame")
     card.AnchorPoint = Vector2.new(0.5,0.5)
     card.Position = UDim2.fromScale(0.5,0.5)
-    card.Size = UDim2.fromOffset(430,310)
+    card.Size = UDim2.fromOffset(440,322)
     card.BackgroundColor3 = Color3.fromRGB(9,14,23)
     card.BorderSizePixel = 0
-    Instance.new("UICorner", card).CornerRadius = UDim.new(0,18)
+    card.Parent = gui
+    Instance.new("UICorner",card).CornerRadius = UDim.new(0,18)
 
-    local stroke = Instance.new("UIStroke", card)
+    local stroke = Instance.new("UIStroke",card)
     stroke.Thickness = 1.5
+    stroke.Transparency = 0.12
     stroke.Color = Color3.fromRGB(62,214,190)
-    stroke.Transparency = 0.15
+    local grad = Instance.new("UIGradient",stroke)
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(45,212,191)),
+        ColorSequenceKeypoint.new(0.5,Color3.fromRGB(56,189,248)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(129,140,248))
+    })
 
-    local title = Instance.new("TextLabel", card)
-    title.Position = UDim2.fromOffset(22,20)
-    title.Size = UDim2.new(1,-44,0,30)
+    local title = Instance.new("TextLabel",card)
+    title.Position = UDim2.fromOffset(24,22)
+    title.Size = UDim2.new(1,-48,0,34)
     title.BackgroundTransparency = 1
     title.Text = "BOOGA HUB"
     title.TextColor3 = Color3.fromRGB(245,248,255)
@@ -86,90 +109,135 @@ function __BoogaHubKeyGate()
     title.TextSize = 24
     title.TextXAlignment = Enum.TextXAlignment.Left
 
-    local sub = Instance.new("TextLabel", card)
-    sub.Position = UDim2.fromOffset(22,52)
-    sub.Size = UDim2.new(1,-44,0,20)
+    local sub = Instance.new("TextLabel",card)
+    sub.Position = UDim2.fromOffset(24,58)
+    sub.Size = UDim2.new(1,-48,0,20)
     sub.BackgroundTransparency = 1
-    sub.Text = "Free key access • valid for 24 hours"
+    sub.Text = "LootLabs access • 24-hour key"
     sub.TextColor3 = Color3.fromRGB(137,153,176)
     sub.Font = Enum.Font.GothamMedium
     sub.TextSize = 12
     sub.TextXAlignment = Enum.TextXAlignment.Left
 
-    local input = Instance.new("TextBox", card)
-    input.Position = UDim2.fromOffset(22,100)
-    input.Size = UDim2.new(1,-44,0,48)
-    input.BackgroundColor3 = Color3.fromRGB(15,23,35)
-    input.BorderSizePixel = 0
-    input.ClearTextOnFocus = false
-    input.PlaceholderText = "Paste your key here..."
-    input.PlaceholderColor3 = Color3.fromRGB(103,118,140)
-    input.TextColor3 = Color3.fromRGB(240,245,252)
-    input.Font = Enum.Font.GothamMedium
-    input.TextSize = 14
-    Instance.new("UICorner", input).CornerRadius = UDim.new(0,12)
-    local pad = Instance.new("UIPadding", input)
+    local box = Instance.new("TextBox",card)
+    box.Position = UDim2.fromOffset(24,104)
+    box.Size = UDim2.new(1,-48,0,48)
+    box.BackgroundColor3 = Color3.fromRGB(15,23,35)
+    box.BorderSizePixel = 0
+    box.ClearTextOnFocus = false
+    box.PlaceholderText = "Your key appears here after completion..."
+    box.PlaceholderColor3 = Color3.fromRGB(103,118,140)
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(240,245,252)
+    box.Font = Enum.Font.GothamMedium
+    box.TextSize = 13
+    Instance.new("UICorner",box).CornerRadius = UDim.new(0,12)
+    local pad = Instance.new("UIPadding",box)
     pad.PaddingLeft = UDim.new(0,14)
     pad.PaddingRight = UDim.new(0,14)
 
-    local status = Instance.new("TextLabel", card)
-    status.Position = UDim2.fromOffset(22,157)
-    status.Size = UDim2.new(1,-44,0,22)
+    local status = Instance.new("TextLabel",card)
+    status.Position = UDim2.fromOffset(24,160)
+    status.Size = UDim2.new(1,-48,0,36)
     status.BackgroundTransparency = 1
-    status.Text = "Press GET KEY, then CHECK KEY."
+    status.Text = "Press GET KEY to create your personal LootLabs session."
+    status.TextWrapped = true
     status.TextColor3 = Color3.fromRGB(137,153,176)
     status.Font = Enum.Font.GothamMedium
     status.TextSize = 12
     status.TextXAlignment = Enum.TextXAlignment.Left
 
-    local function button(text, x, color)
-        local b = Instance.new("TextButton", card)
-        b.Position = UDim2.fromOffset(x,198)
-        b.Size = UDim2.fromOffset(184,48)
-        b.BackgroundColor3 = color
+    local function mk(text,x,bg)
+        local b = Instance.new("TextButton",card)
+        b.Position = UDim2.fromOffset(x,216)
+        b.Size = UDim2.fromOffset(188,48)
+        b.BackgroundColor3 = bg
         b.BorderSizePixel = 0
-        b.AutoButtonColor = true
+        b.AutoButtonColor = false
         b.Text = text
         b.TextColor3 = Color3.fromRGB(245,249,255)
         b.Font = Enum.Font.GothamBold
         b.TextSize = 13
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0,12)
+        Instance.new("UICorner",b).CornerRadius = UDim.new(0,12)
         return b
     end
 
-    local getBtn = button("GET KEY", 22, Color3.fromRGB(18,28,42))
-    local checkBtn = button("CHECK KEY", 224, Color3.fromRGB(36,181,159))
+    local getBtn = mk("GET KEY",24,Color3.fromRGB(18,28,42))
+    local checkBtn = mk("CHECK KEY",228,Color3.fromRGB(36,181,159))
 
-    local footer = Instance.new("TextLabel", card)
-    footer.Position = UDim2.fromOffset(22,263)
-    footer.Size = UDim2.new(1,-44,0,24)
+    local footer = Instance.new("TextLabel",card)
+    footer.Position = UDim2.fromOffset(24,280)
+    footer.Size = UDim2.new(1,-48,0,22)
     footer.BackgroundTransparency = 1
-    footer.Text = "Booga Hub Free Key System"
+    footer.Text = "Complete LootLabs, then press CHECK KEY"
     footer.TextColor3 = Color3.fromRGB(91,106,129)
     footer.Font = Enum.Font.Gotham
     footer.TextSize = 11
+    footer.TextXAlignment = Enum.TextXAlignment.Center
+
+    local sessionId = saved and saved.sessionId or nil
 
     getBtn.MouseButton1Click:Connect(function()
-        input.Text = FREE_KEY
-        if type(setclipboard) == "function" then pcall(setclipboard, FREE_KEY) end
-        status.Text = "Free key inserted."
+        getBtn.Text = "CREATING..."
+        local data = apiGet(API .. "/start")
+        if not data or data.ok ~= true or not data.session_id or not data.loot_url then
+            status.Text = "Could not create session. Try again."
+            status.TextColor3 = Color3.fromRGB(255,103,120)
+            getBtn.Text = "GET KEY"
+            return
+        end
+        sessionId = tostring(data.session_id)
+        saveSaved({sessionId=sessionId})
+        local link = tostring(data.loot_url)
+        if type(setclipboard) == "function" then
+            pcall(setclipboard,link)
+            status.Text = "LootLabs link copied. Open it, finish the task, then return."
+        else
+            box.Text = link
+            status.Text = "Copy the LootLabs link from the box and complete it."
+        end
         status.TextColor3 = Color3.fromRGB(95,220,197)
+        getBtn.Text = "LINK READY"
     end)
 
     checkBtn.MouseButton1Click:Connect(function()
-        local typed = tostring(input.Text or ""):gsub("^%s+",""):gsub("%s+$","")
-        if typed == FREE_KEY then
-            authorize(FREE_KEY, os.time() + KEY_DURATION)
-            status.Text = "Access granted • 24 hours"
-            status.TextColor3 = Color3.fromRGB(96,230,169)
-            checkBtn.Text = "SUCCESS"
-            task.wait(0.35)
-            gui:Destroy()
-        else
-            status.Text = "Invalid key."
-            status.TextColor3 = Color3.fromRGB(255,103,120)
-            checkBtn.Text = "TRY AGAIN"
+        local cache = loadSaved()
+        if not sessionId and cache and cache.sessionId then sessionId=tostring(cache.sessionId) end
+        if not sessionId then
+            status.Text = "Press GET KEY first."
+            status.TextColor3 = Color3.fromRGB(255,190,95)
+            return
         end
+        checkBtn.Text = "CHECKING..."
+        local data = apiGet(API .. "/status?session_id=" .. HttpService:UrlEncode(sessionId))
+        if not data or data.ok ~= true then
+            status.Text = "Server check failed. Try again."
+            status.TextColor3 = Color3.fromRGB(255,103,120)
+            checkBtn.Text = "CHECK KEY"
+            return
+        end
+        if data.completed ~= true then
+            status.Text = "LootLabs has not confirmed completion yet."
+            status.TextColor3 = Color3.fromRGB(255,190,95)
+            checkBtn.Text = "CHECK AGAIN"
+            return
+        end
+        if data.expired == true or tonumber(data.remaining_seconds or 0) <= 0 then
+            status.Text = "Key expired. Get a new one."
+            status.TextColor3 = Color3.fromRGB(255,103,120)
+            checkBtn.Text = "GET NEW KEY"
+            return
+        end
+        box.Text = tostring(data.key or "")
+        authorize(tostring(data.key),tonumber(data.remaining_seconds))
+        status.Text = "Access granted • valid for 24 hours."
+        status.TextColor3 = Color3.fromRGB(96,230,169)
+        checkBtn.Text = "SUCCESS"
+        task.wait(0.45)
+        TweenService:Create(card,TweenInfo.new(0.18),{BackgroundTransparency=1}):Play()
+        TweenService:Create(dim,TweenInfo.new(0.18),{BackgroundTransparency=1}):Play()
+        task.wait(0.2)
+        gui:Destroy()
     end)
 
     while not env.__BOOGA_KEY_AUTHORIZED do task.wait(0.1) end
@@ -178,7 +246,7 @@ end
 
 __BoogaHubKeyGate()
 __BoogaHubKeyGate = nil
--- // END BOOGA HUB FREE KEY SYSTEM // --
+-- // END BOOGA HUB LOOTLABS KEY SYSTEM // --
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
