@@ -1,0 +1,5 @@
+status=success
+run_id=33074504239
+commit=ed41d14f176001d06930ecab95e0c4db242afe19
+tag=riu-v1.2
+build=riuclicker-1.2-permanent-coordinate-lock
