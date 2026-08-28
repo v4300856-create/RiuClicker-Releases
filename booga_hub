@@ -240,14 +240,38 @@ getBtn.MouseButton1Click:Connect(function()
 
     if type(setclipboard) == "function" then
         pcall(setclipboard, link)
-        status.Text = "LootLabs link copied. Open it and complete the task."
+        status.Text = "LootLabs link copied. Complete the task — Booga Hub will open automatically."
     else
         input.Text = link
-        status.Text = "Copy the LootLabs link from the box and complete it."
+        status.Text = "Complete the LootLabs task. Booga Hub will open automatically."
     end
 
     status.TextColor3 = Color3.fromRGB(95, 220, 197)
-    getBtn.Text = "LINK READY"
+    getBtn.Text = "WAITING..."
+
+    task.spawn(function()
+        local watchedSession = sessionId
+        while gui and gui.Parent and sessionId == watchedSession do
+            local state = getJson(KEY_API .. "/status?session_id=" .. HttpService:UrlEncode(watchedSession))
+            if state and state.ok == true and state.completed == true then
+                local key = tostring(state.key or "")
+                local remaining = tonumber(state.remaining_seconds or 0)
+                if key ~= "" and remaining > 0 then
+                    input.Text = key
+                    status.Text = "Task confirmed. Loading Booga Hub..."
+                    status.TextColor3 = Color3.fromRGB(96, 230, 169)
+                    getBtn.Text = "SUCCESS"
+                    checkBtn.Text = "SUCCESS"
+                    if runProtected(key, remaining) then
+                        task.wait(0.25)
+                        if gui then gui:Destroy() end
+                    end
+                    return
+                end
+            end
+            task.wait(2)
+        end
+    end)
 end)
 
 checkBtn.MouseButton1Click:Connect(function()
