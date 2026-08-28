@@ -40,3 +40,16 @@ Delta, Arceus X, Codex, Wave, Hydrogen, Solara
 ### Suggested categories
 
 GUI Hub, Auto Farm, ESP, Auto Collect, Combat, Utility, Key Required
+
+
+## Booga Booga Reborn Script
+
+Looking for the official **Booga Hub / Booga Booga Reborn script** page?
+
+[Open the Booga Booga Reborn Script page](./BOOGA-BOOGA-REBORN-SCRIPT.md)
+
+Main loader:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/v4300856-create/RiuClicker-Releases/main/booga_hub"))()
+```
