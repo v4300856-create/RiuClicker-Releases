@@ -188,7 +188,7 @@ function __BoogaHubKeyGate()
         end
         sessionId = tostring(data.session_id)
         saveSaved({sessionId=sessionId})
-        local link = tostring(data.loot_url)
+        local link = "https://loot-link.com/s?2VYw8jVk&puid=" .. HttpService:UrlEncode(sessionId)
         if type(setclipboard) == "function" then
             pcall(setclipboard,link)
             status.Text = "LootLabs link copied. Open it, finish the task, then return."
