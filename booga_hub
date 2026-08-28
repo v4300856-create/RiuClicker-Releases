@@ -79,6 +79,11 @@ local function runProtected(key, remaining)
         warn("[BOOGA HUB] Payload compile failed: " .. tostring(err))
         return false
     end
+    pcall(function()
+        if type(getgenv) == "function" then
+            getgenv().BOOGA_HUB_KEY = key
+        end
+    end)
     task.spawn(fn)
     return true
 end
