@@ -236,7 +236,7 @@ getBtn.MouseButton1Click:Connect(function()
 
     sessionId = tostring(data.session_id)
     writeSaved({sessionId = sessionId})
-    local link = LOOT_URL .. "&puid=" .. HttpService:UrlEncode(sessionId)
+    local link = KEY_API .. "/begin?session_id=" .. HttpService:UrlEncode(sessionId)
 
     if type(setclipboard) == "function" then
         pcall(setclipboard, link)
