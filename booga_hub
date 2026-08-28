@@ -5,7 +5,7 @@ local TweenService = game:GetService("TweenService")
 
 local KEY_API = "https://rpbjeexhbanaavazfmpo.supabase.co/functions/v1/booga-key"
 local CODE_API = "https://rpbjeexhbanaavazfmpo.supabase.co/functions/v1/booga-code"
-local LOOT_URL = "https://loot-link.com/s?2VYw8jVk"
+local LOOT_URL = "https://lootdest.org/s?ve2FoMVY"
 local SAVE_FOLDER = "BOOGA_HUB"
 local SAVE_PATH = SAVE_FOLDER .. "/key.json"
 
