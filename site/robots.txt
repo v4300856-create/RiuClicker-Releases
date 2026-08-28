@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://v4300856-create.github.io/RiuClicker-Releases/sitemap.xml
