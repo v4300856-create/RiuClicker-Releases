@@ -1,0 +1,40 @@
+name: Build RiuClicker Admin Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin-preview/**'
+      - '.github/workflows/admin-preview-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish single EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish admin-preview/RiuClickerAdmin.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          if (-not (Test-Path out/RiuClicker-Admin.exe)) { throw 'EXE missing' }
+          (Get-FileHash out/RiuClicker-Admin.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Admin.sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RiuClicker-Admin-Preview
+          path: |
+            out/RiuClicker-Admin.exe
+            out/RiuClicker-Admin.sha256.txt
+          retention-days: 30
