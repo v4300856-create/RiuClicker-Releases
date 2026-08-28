@@ -158,7 +158,7 @@ local sub = Instance.new("TextLabel", card)
 sub.Position = UDim2.fromOffset(91, 52)
 sub.Size = UDim2.new(1, -115, 0, 20)
 sub.BackgroundTransparency = 1
-sub.Text = "Protected access • LootLabs • 24h"
+sub.Text = "Protected access • LootLabs • 30 days"
 sub.TextColor3 = Color3.fromRGB(137, 153, 176)
 sub.Font = Enum.Font.GothamMedium
 sub.TextSize = 12
@@ -240,12 +240,12 @@ getBtn.MouseButton1Click:Connect(function()
     writeSaved({sessionId = sessionId})
     local link = KEY_API .. "/begin?session_id=" .. HttpService:UrlEncode(sessionId)
 
+    input.Text = link
     if type(setclipboard) == "function" then
         pcall(setclipboard, link)
-        status.Text = "LootLabs link copied. Complete the task — Booga Hub will open automatically."
+        status.Text = "LootLabs link copied and shown above. Open it and complete the task."
     else
-        input.Text = link
-        status.Text = "Complete the LootLabs task. Booga Hub will open automatically."
+        status.Text = "Copy the LootLabs link shown above and complete the task."
     end
 
     status.TextColor3 = Color3.fromRGB(95, 220, 197)
