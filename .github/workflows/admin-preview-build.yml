@@ -45,9 +45,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh release view riu-admin-preview-v0.1 --json tagName *> $null
+          gh release view riu-admin-v1.0 --json tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload riu-admin-preview-v0.1 out/RiuClicker-Admin.exe out/RiuClicker-Admin.sha256.txt --clobber
+            gh release upload riu-admin-v1.0 out/RiuClicker-Admin.exe out/RiuClicker-Admin.sha256.txt --clobber
           } else {
-            gh release create riu-admin-preview-v0.1 out/RiuClicker-Admin.exe out/RiuClicker-Admin.sha256.txt --title 'RiuClicker Admin Preview 0.1' --notes 'C# WPF admin preview. Local license list only; server payment issuance is not connected yet.'
+            gh release create riu-admin-v1.0 out/RiuClicker-Admin.exe out/RiuClicker-Admin.sha256.txt --title 'RiuClicker Admin 1.0' --notes 'C# WPF server-backed RiuClicker Pro license admin. Create, revoke and reset HWID for real Pro keys.'
           }
