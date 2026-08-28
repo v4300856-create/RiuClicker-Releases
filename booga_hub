@@ -84,11 +84,13 @@ local function runProtected(key, remaining)
 end
 
 local saved = readSaved()
+local savedValidKey = nil
+local savedRemaining = 0
 if saved and saved.key then
     local valid, remaining = validateKey(saved.key)
     if valid then
-        runProtected(tostring(saved.key), remaining)
-        return
+        savedValidKey = tostring(saved.key)
+        savedRemaining = tonumber(remaining) or 0
     end
 end
 
@@ -170,7 +172,7 @@ input.BorderSizePixel = 0
 input.ClearTextOnFocus = false
 input.PlaceholderText = "Paste key here, or use GET KEY..."
 input.PlaceholderColor3 = Color3.fromRGB(103, 118, 140)
-input.Text = ""
+input.Text = savedValidKey or ""
 input.TextColor3 = Color3.fromRGB(240, 245, 252)
 input.Font = Enum.Font.GothamMedium
 input.TextSize = 13
@@ -183,7 +185,7 @@ local status = Instance.new("TextLabel", card)
 status.Position = UDim2.fromOffset(24, 162)
 status.Size = UDim2.new(1, -48, 0, 38)
 status.BackgroundTransparency = 1
-status.Text = "Get a key through LootLabs, then press CHECK KEY."
+status.Text = savedValidKey and "Saved key found. Press CHECK KEY to continue." or "Get a key through LootLabs, then press CHECK KEY."
 status.TextWrapped = true
 status.TextColor3 = Color3.fromRGB(137, 153, 176)
 status.Font = Enum.Font.GothamMedium
