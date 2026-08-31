@@ -91,14 +91,10 @@ old='''                InputService.SetCursor(x, y);
                 InputService.MouseClickHeld("left", t.ClickHold, CancellationToken.None);
                 await BoltDelay(t.AfterClick);
 '''
-new='''                var returnPos = InputService.CursorPosition();
+new='''                // Teleport once to the saved coordinate, press immediately,
+                // then never touch cursor position again. User can move the mouse at once.
                 InputService.SetCursor(x, y);
-                await BoltDelay(t.PointerSettle);
-
-                // Press at the saved coordinate, then immediately release control of the cursor.
-                // The mouse can be moved while the final click is still held.
                 InputService.MouseDown("left");
-                InputService.SetCursor(returnPos.X, returnPos.Y);
                 await BoltDelay(Math.Max(10, t.ClickHold));
                 InputService.MouseUp("left");
                 await BoltDelay(t.AfterClick);
