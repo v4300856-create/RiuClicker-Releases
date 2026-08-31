@@ -367,7 +367,7 @@ p.write_text(s,encoding="utf-8")
 for name in ["MainWindow.xaml","MainWindow.xaml.cs","MainWindow.Extras.cs","BrandVisual.cs","ActivationWindow.xaml"]:
     p=root/name
     if p.exists():
-        t=p.read_text(encoding="utf-8").replace("RiuClicker 1.2","RiuClicker 1.3").replace("RIUCLICKER 1.2","RIUCLICKER 1.3")
+        t=p.read_text(encoding="utf-8").replace("RiuClicker 1.1","RiuClicker 1.3").replace("RIUCLICKER 1.1","RIUCLICKER 1.3").replace("RiuClicker 1.2","RiuClicker 1.3").replace("RIUCLICKER 1.2","RIUCLICKER 1.3")
         p.write_text(t,encoding="utf-8")
 
 print("RiuClicker 1.3 fixes applied")
