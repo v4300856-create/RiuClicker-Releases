@@ -1,0 +1,148 @@
+name: Publish RiuClicker 1.3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v13.yml'
+      - '.build/free-v13-fixes.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-v13
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RIU_LICENSE_ENDPOINT: https://rpbjeexhbanaavazfmpo.supabase.co/functions/v1/riu-license
+      RIU_GET_KEY_URL: https://lootdest.org/s?nbh5RgXk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified source base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh api "/repos/${{ github.repository }}/actions/artifacts/9359887752/zip" > artifact.zip
+          Expand-Archive artifact.zip -DestinationPath artifact -Force
+          $source = Get-ChildItem artifact -Recurse -Filter 'Riu-Strawberry-5.20-Source.zip' | Select-Object -First 1
+          if (-not $source) { throw 'Source bundle missing' }
+          Expand-Archive $source.FullName -DestinationPath src -Force
+
+      - name: Apply RiuClicker 1.3 patches
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+          python .build/bolts-523.py
+          python .build/license-v1.py
+          python .build/license-v11-online.py
+          python .build/getkey-v1.py
+          python .build/supabase-key-v11.py
+          python .build/settings-save-v1.py
+          python .build/startup-banner-v1.py
+          python .build/version-11.py
+          python .build/free-v13-fixes.py
+
+      - name: Validate source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          [xml](Get-Content src/App.xaml -Raw) | Out-Null
+          [xml](Get-Content src/ActivationWindow.xaml -Raw) | Out-Null
+          [xml](Get-Content src/MainWindow.xaml -Raw) | Out-Null
+          [xml](Get-Content src/InterfacePickerWindow.xaml -Raw) | Out-Null
+          foreach($m in @(
+            'RiuClicker 1.3',
+            'GET KEY',
+            'APPLY KEY',
+            'PollAsync',
+            'CreateSessionId',
+            'BOLT PUSH',
+            'BOLTS',
+            'CHOOSE INTERFACE',
+            'CLASSIC',
+            'COMPACT',
+            'NEON',
+            'MouseDown("left")',
+            'MouseUp("left")',
+            '<Version>1.3.0</Version>'
+          )) {
+            if(-not (Get-ChildItem src -Recurse -Include *.cs,*.xaml,*.csproj | Select-String -SimpleMatch $m)) { throw "Missing marker: $m" }
+          }
+          if(Get-ChildItem src -Recurse -Include *.cs,*.xaml | Select-String -SimpleMatch 'CLICK VVV CLICK') { throw 'CLICK VVV CLICK still present' }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build RiuClicker 1.3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/v13
+          Copy-Item out/v13/RiuClicker.exe out/RiuClicker-1.3.exe
+          if((Get-Item out/RiuClicker-1.3.exe).Length -lt 10000000) { throw 'EXE unexpectedly small' }
+          (Get-FileHash out/RiuClicker-1.3.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-1.3.sha256.txt
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          @(
+            '# RiuClicker 1.3',
+            '',
+            '- LootLabs / GET KEY / APPLY KEY restored',
+            '- 24-hour online FREE key system retained',
+            '- Bolt Push final click no longer locks the mouse cursor',
+            '- Triple V timing increased for Roblox reliability',
+            '- Three startup-selectable interfaces: Classic, Compact, Neon',
+            '- CLICK VVV CLICK removed',
+            '- Autoclicker persistent until explicit stop or configured click limit'
+          ) | Set-Content notes.md
+
+          gh release view riu-v1.3 *> $null
+          if($LASTEXITCODE -eq 0) {
+            gh release upload riu-v1.3 out/RiuClicker-1.3.exe out/RiuClicker-1.3.sha256.txt --clobber
+            gh release edit riu-v1.3 --title 'RiuClicker 1.3' --notes-file notes.md --latest
+          } else {
+            gh release create riu-v1.3 out/RiuClicker-1.3.exe out/RiuClicker-1.3.sha256.txt --title 'RiuClicker 1.3' --notes-file notes.md --target main --latest
+          }
+
+      - name: Record status
+        if: always()
+        shell: pwsh
+        run: |
+          @(
+            "status=${{ job.status }}",
+            "run_id=${{ github.run_id }}",
+            "commit=${{ github.sha }}",
+            'tag=riu-v1.3',
+            'build=riuclicker-1.3-public'
+          ) | Set-Content riu-v13-status.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add riu-v13-status.txt
+          git commit -m 'Record RiuClicker 1.3 status' 2>$null
+          if($LASTEXITCODE -eq 0) { git pull --rebase; git push }
