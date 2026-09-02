@@ -255,20 +255,20 @@ if not p.exists():
 s=p.read_text(encoding="utf-8")
 
 # Strong minimums regardless of selected mode.
-s=re.sub(r'var hold = Math\.Max\(\d+, t\.KeyHold\);', 'var hold = Math.Max(8, t.KeyHold);', s)
-s=re.sub(r'var gap = Math\.Max\(\d+, t\.StepGap\);', 'var gap = Math.Max(12, t.StepGap);', s)
+s=re.sub(r'var hold = Math\.Max\(\d+, t\.KeyHold\);', 'var hold = Math.Max(12, t.KeyHold);', s)
+s=re.sub(r'var gap = Math\.Max\(\d+, t\.StepGap\);', 'var gap = Math.Max(18, t.StepGap);', s)
 
 # Pre-release barrier before VVV.
 s=s.replace('InputService.KeyUp("V");\n        await BoltDelay(3);',
-            'InputService.KeyUp("V");\n        await BoltDelay(10);')
+            'InputService.KeyUp("V");\n        await BoltDelay(14);')
 
 # Replace speed timings with reliable values; speed modes remain, but no 1-3 ms taps.
 s=s.replace('"turbo" => new(5,10,3,8,6,12,14,6),',
-            '"turbo" => new(10,12,12,8,10,12,14,6),')
+            '"turbo" => new(12,14,18,8,12,12,14,6),')
 s=s.replace('"instant" => new(3,4,2,7,5,10,14,6),',
-            '"instant" => new(8,8,12,7,10,10,14,6),')
+            '"instant" => new(12,12,18,7,12,10,14,6),')
 s=s.replace('_ => new(10,24,7,10,8,10,14,6)',
-            '_ => new(12,24,12,10,12,10,14,6)')
+            '_ => new(14,24,18,10,14,10,14,6)')
 
 p.write_text(s,encoding="utf-8")
 print("stability fix applied")
