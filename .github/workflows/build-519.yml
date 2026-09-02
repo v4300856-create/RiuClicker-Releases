@@ -1,0 +1,119 @@
+# Nova 5.19 verified-build trigger
+name: Build 5.19 Nova
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.build/source519.part*'
+      - '.github/workflows/build-519.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parts = Get-ChildItem .build/source519.part* | Sort-Object Name
+          if ($parts.Count -ne 7) { throw "Expected 7 source chunks, found $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          if ($b64.Length -ne 73440) { throw "Wrong base64 length: $($b64.Length)" }
+          [IO.File]::WriteAllBytes("source519.zip", [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash source519.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne 'bec6c73ec4db0a5dde7d9f76365586182cf9a401bb6494394e727f7f271903eb') { throw "Source hash mismatch: $hash" }
+          Expand-Archive source519.zip -DestinationPath src -Force
+          if (-not (Test-Path 'src/RiuClickerCS.csproj')) { throw 'csproj missing' }
+
+      - name: Complete Nova Wallhop UI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'src/MainWindow.xaml'
+          $xaml = Get-Content $path -Raw
+          $needle = '                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>'
+          if (-not $xaml.Contains($needle)) { throw 'Wallhop insertion point missing' }
+          $controls = @'
+                                            <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                                <StackPanel Margin="0,0,6,0"><TextBlock Text="Пакетов движения" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopSmoothSteps" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="1 = резкий рывок, 2–6 = плавнее"/></StackPanel>
+                                                <StackPanel Grid.Column="1" Margin="6,0,0,0"><TextBlock Text="Длительность рывка, мс" Foreground="{DynamicResource MutedBrush}"/><TextBox x:Name="WallhopFlickDuration" Style="{StaticResource RiuTextBox}" TextChanged="Wallhop_Changed" ToolTip="0 = максимально быстро"/></StackPanel>
+                                            </Grid>
+                                            <CheckBox x:Name="WallhopReturn" Content="Всегда возвращать камеру назад" Style="{StaticResource RiuCheckBox}" Checked="Wallhop_Changed" Unchecked="Wallhop_Changed" Margin="0,12,0,0"/>
+'@
+          $xaml = $xaml.Replace($needle, $controls.TrimEnd())
+          Set-Content -Path $path -Value $xaml -Encoding utf8
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Static version check
+        shell: pwsh
+        run: |
+          if (-not (Select-String -Path 'src/RiuClickerCS.csproj' -Pattern '<Version>5.19.0</Version>' -SimpleMatch)) { throw '5.19 project version missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'NOVA CONTROL' -SimpleMatch)) { throw 'Nova UI marker missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'PageHome' -SimpleMatch)) { throw 'Home dashboard missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'WallhopSmoothSteps' -SimpleMatch)) { throw 'Wallhop smooth control missing' }
+          if (-not (Select-String -Path 'src/MainWindow.xaml' -Pattern 'WallhopFlickDuration' -SimpleMatch)) { throw 'Wallhop duration control missing' }
+
+      - name: Build Riu
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker `
+            -p:ApplicationIcon=app.ico `
+            -o out/riu
+          if ($LASTEXITCODE -ne 0) { throw 'Riu build failed' }
+          Copy-Item out/riu/RiuClicker.exe out/RiuClicker-5.19.exe
+
+      - name: Build Strawberry
+        shell: pwsh
+        run: |
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DefineConstants=STRAWBERRY `
+            -p:AssemblyName=StrawberryClicker `
+            -p:ApplicationIcon=strawberry.ico `
+            -o out/strawberry
+          if ($LASTEXITCODE -ne 0) { throw 'Strawberry build failed' }
+          Copy-Item out/strawberry/StrawberryClicker.exe out/StrawberryClicker-5.19.exe
+
+      - name: Verify binaries
+        shell: pwsh
+        run: |
+          $files = @('out/RiuClicker-5.19.exe','out/StrawberryClicker-5.19.exe')
+          foreach ($f in $files) {
+            if (-not (Test-Path $f)) { throw "$f missing" }
+            if ((Get-Item $f).Length -lt 10000000) { throw "$f unexpectedly small" }
+            Write-Host "$f = $((Get-Item $f).Length) bytes"
+          }
+
+      - name: Package source and builds
+        shell: pwsh
+        run: |
+          Compress-Archive -Path src/* -DestinationPath out/Riu-Strawberry-5.19-Source.zip -Force
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item out/RiuClicker-5.19.exe package/
+          Copy-Item out/StrawberryClicker-5.19.exe package/
+          Copy-Item out/Riu-Strawberry-5.19-Source.zip package/
+          Compress-Archive -Path package/* -DestinationPath out/Riu-and-Strawberry-5.19.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Riu-Strawberry-5.19
+          if-no-files-found: error
+          path: |
+            out/RiuClicker-5.19.exe
+            out/StrawberryClicker-5.19.exe
+            out/Riu-Strawberry-5.19-Source.zip
+            out/Riu-and-Strawberry-5.19.zip
