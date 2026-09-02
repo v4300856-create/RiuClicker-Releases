@@ -1,5 +1,5 @@
-status=success
-run_id=33416030220
-commit=669b5699e82727c3e8e450122469a0c32f9a86f7
+status=cancelled
+run_id=33584350342
+commit=6a4a1ad69af241cc3cc59ca7065f5754e510f9d5
 tag=riu-v1.1
 build=riuclicker-1.1-supabase-lootlabs
