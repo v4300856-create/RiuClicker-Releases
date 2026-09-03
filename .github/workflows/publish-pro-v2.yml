@@ -64,6 +64,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'V2 UI/macro patch failed'}
           python .build/v2/version_v2.py
           if($LASTEXITCODE -ne 0){throw 'V2 version patch failed'}
+          python .build/v2/remove_bolt_text_v2.py
+          if($LASTEXITCODE -ne 0){throw 'Bolt cleanup failed'}
 
       - name: Validate PRO 2.0
         shell: pwsh
