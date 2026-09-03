@@ -8,6 +8,7 @@ p=root/"MainWindow.xaml"
 x=p.read_text(encoding="utf-8")
 x=x.replace('Одновременно могут работать два разных макроса','PRO · одновременно работают 2 макроса · расширенные задержки и повторы')
 x=x.replace('NOVA CONTROL CENTER','RIUCLICKER PRO CONTROL')
+x=x.replace('V из Bolt Push внутри программы не отправляется участникам.','Сгенерированные программой нажатия не отправляются участникам.')
 if 'PRO ADVANTAGES' not in x:
     needle='<Grid x:Name="PageMacros" Visibility="Collapsed">'
     if needle in x:
