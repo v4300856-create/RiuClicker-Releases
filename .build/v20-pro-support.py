@@ -4,6 +4,28 @@ root=Path("src")
 p=root/"InputService.cs"
 s=p.read_text(encoding="utf-8")
 
+if 'public static void KeyDown(string name)' not in s:
+    target='''    public static void TapKey(string name, int holdMs, CancellationToken token)
+    {
+        if (!TryVirtualKey(name, out var vk)) return;
+        Key(vk, false);
+        if (holdMs > 0 && token.WaitHandle.WaitOne(holdMs)) { Key(vk, true); return; }
+        Key(vk, true);
+    }
+'''
+    addition=target+'''\n    public static void KeyDown(string name)
+    {
+        if (TryVirtualKey(name, out var vk)) Key(vk, false);
+    }
+
+    public static void KeyUp(string name)
+    {
+        if (TryVirtualKey(name, out var vk)) Key(vk, true);
+    }
+'''
+    if target not in s: raise SystemExit("TapKey marker missing")
+    s=s.replace(target,addition,1)
+
 if 'public static void MouseDown(string button)' not in s:
     marker='    public static void MouseClick(string button)\n'
     idx=s.find(marker)
