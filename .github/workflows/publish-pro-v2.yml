@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download clean 5.22 source
+      - name: Download clean restored 5.22 source
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -40,31 +40,30 @@ jobs:
           if(-not (Test-Path src/RiuClickerCS.csproj)){throw '5.22 source missing'}
           New-Item -ItemType Directory -Force private-build | Out-Null
           Copy-Item src/App.xaml private-build/base-App.xaml -Force
-
-      - name: Apply 5.22 core fixes
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference='Stop'
-          python .build/localization520-hotfix.py
-          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
-          python cps520-hotfix.py
-          python .build/ui522-hotfix.py
+          if(-not (Select-String -Path src/MainWindow.xaml -Pattern 'x:Name="MacroKeyHold"' -SimpleMatch)){throw '5.22 macro editor missing'}
 
       - name: Apply PRO system, Lobby and Trace
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           python .build/v2/pro_input_helpers.py
+          if($LASTEXITCODE -ne 0){throw 'PRO input helpers failed'}
           python .build/pro-public/paid_lobby_patch.py
+          if($LASTEXITCODE -ne 0){throw 'Paid/lobby patch failed'}
           python .build/pro-public/startup_fix.py
+          if($LASTEXITCODE -ne 0){throw 'Startup patch failed'}
           python .build/pro-public/paid_ui_lobby_fix.py
+          if($LASTEXITCODE -ne 0){throw 'Paid UI patch failed'}
           python .build/pro-public/restore_app_resources.py
+          if($LASTEXITCODE -ne 0){throw 'App resources restore failed'}
           python .build/pro-public/trace_lobby_patch.py
+          if($LASTEXITCODE -ne 0){throw 'Trace Lobby patch failed'}
           python .build/pro-public/persistent_clicker_fix.py
+          if($LASTEXITCODE -ne 0){throw 'Clicker stability patch failed'}
           python .build/v2/common_ui_macro_v2.py
+          if($LASTEXITCODE -ne 0){throw 'V2 UI/macro patch failed'}
           python .build/v2/version_v2.py
+          if($LASTEXITCODE -ne 0){throw 'V2 version patch failed'}
 
       - name: Validate PRO 2.0
         shell: pwsh
