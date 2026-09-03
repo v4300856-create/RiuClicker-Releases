@@ -1,0 +1,133 @@
+name: Publish RiuClicker PRO 2.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-pro-v20.yml'
+      - '.build/v20-common.py'
+      - '.build/v20-pro-support.py'
+      - '.build/v20-pro.py'
+      - '.build/pro-public/paid_lobby_patch.py'
+      - '.build/pro-public/startup_fix.py'
+      - '.build/pro-public/paid_ui_lobby_fix.py'
+      - '.build/pro-public/trace_lobby_patch.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-pro-v20
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download clean 5.22 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Invoke-WebRequest -Uri 'https://github.com/v4300856-create/RiuClicker-Releases/releases/download/riu-v5.22-restored/RiuClicker-5.22-Source.zip' -OutFile base.zip
+          Expand-Archive base.zip -DestinationPath src -Force
+          if(-not (Test-Path src/RiuClickerCS.csproj)){throw '5.22 source missing'}
+          Copy-Item src/App.xaml base-App.xaml -Force
+
+      - name: Apply PRO key, Lobby and Trace
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python .build/pro-public/paid_lobby_patch.py
+
+          # Restore all original 5.22 resources, but remove automatic StartupUri.
+          $app=Get-Content base-App.xaml -Raw
+          $app=[regex]::Replace($app,'\s+StartupUri\s*=\s*"[^"]*"','',1)
+          Set-Content src/App.xaml $app -Encoding utf8
+
+          python .build/pro-public/startup_fix.py
+          python .build/pro-public/paid_ui_lobby_fix.py
+          python .build/v20-pro-support.py
+          python .build/pro-public/trace_lobby_patch.py
+          python .build/v20-common.py
+          python .build/v20-pro.py
+          python .build/settings-save-v1.py
+
+      - name: Validate PRO source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          [xml](Get-Content src/App.xaml -Raw) | Out-Null
+          [xml](Get-Content src/PaidActivationWindow.xaml -Raw) | Out-Null
+          [xml](Get-Content src/MainWindow.xaml -Raw) | Out-Null
+          [xml](Get-Content src/InterfacePickerWindow.xaml -Raw) | Out-Null
+          foreach($m in @(
+            'PaidLicenseService',
+            'PRO ACTIVATION',
+            'PageMacros',
+            'MacroKeyHold',
+            'MacroModifierHold',
+            'MacroStepGap',
+            'MacroPointerSettle',
+            'MacroRepeatDelay',
+            'ВСЕ ЦИФРЫ МОЖНО МЕНЯТЬ',
+            'CLASSIC 5.22',
+            'COMPACT',
+            'NEON',
+            'RIU LOBBY',
+            'TRACE LOBBY',
+            'REQUEST TRACE CONTROL',
+            'IsRobloxForeground',
+            '<Version>2.0.0</Version>'
+          )){
+            if(-not (Get-ChildItem src -Recurse -Include *.cs,*.xaml,*.csproj | Select-String -SimpleMatch $m)){throw "Missing marker: $m"}
+          }
+          if(Get-ChildItem src -Recurse -Include *.cs,*.xaml | Select-String -Pattern 'BOLT PUSH|BOLTS|CLICK VVV CLICK'){throw 'Bolts code/UI still present in PRO'}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build PRO 2.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker-Pro `
+            -p:ApplicationIcon=app.ico `
+            -o out
+          if(-not (Test-Path out/RiuClicker-Pro.exe)){throw 'PRO exe missing'}
+          (Get-FileHash out/RiuClicker-Pro.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro.sha256.txt
+
+      - name: Publish PRO 2.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          @(
+            '# RiuClicker PRO 2.0',
+            '',
+            '- Bolts removed',
+            '- Original configurable 5.22 macro editor restored',
+            '- All macro timings editable',
+            '- Three startup interfaces: Classic 5.22 / Compact / Neon',
+            '- New PRO activation window',
+            '- PRO: two macros can run simultaneously',
+            '- PRO: Lobby + consent-gated Roblox-only Trace',
+            '- Paid 30 / 90 day / Lifetime server keys'
+          ) | Set-Content notes.md
+          $tag='riu-pro-v2'
+          gh release view $tag *> $null
+          if($LASTEXITCODE -eq 0){
+            gh release upload $tag out/RiuClicker-Pro.exe out/RiuClicker-Pro.sha256.txt --clobber
+            gh release edit $tag --title 'RiuClicker PRO 2.0' --notes-file notes.md --latest
+          } else {
+            gh release create $tag out/RiuClicker-Pro.exe out/RiuClicker-Pro.sha256.txt --title 'RiuClicker PRO 2.0' --notes-file notes.md --target main --latest
+          }
