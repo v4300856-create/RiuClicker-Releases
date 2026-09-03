@@ -12,6 +12,10 @@ for p in root.rglob('*'):
     s=s.replace('RiuClicker 1.1',label).replace('RIUCLICKER 1.1',label.upper())
     s=s.replace('RiuClicker 1.2',label).replace('RIUCLICKER 1.2',label.upper())
     s=s.replace('RiuClicker 1.3',label).replace('RIUCLICKER 1.3',label.upper())
+    # Remove obsolete wording from the old built-in Bolts era.
+    s=s.replace('V из Bolt Push внутри программы не отправляется участникам.','V из обычных макросов внутри программы не отправляется участникам.')
+    s=s.replace('Bolt Push', 'макрос')
+    s=s.replace('BOLT PUSH', 'МАКРОС')
     p.write_text(s,encoding='utf-8')
 
 # Old-style visible macro start notification in the app status/log.
@@ -28,4 +32,4 @@ s=re.sub(r'<Version>[^<]+</Version>','<Version>2.0.0</Version>',s)
 s=re.sub(r'<FileVersion>[^<]+</FileVersion>','<FileVersion>2.0.0.0</FileVersion>',s)
 s=re.sub(r'<AssemblyVersion>[^<]+</AssemblyVersion>','<AssemblyVersion>2.0.0.0</AssemblyVersion>',s)
 p.write_text(s,encoding='utf-8')
-print('v2 branding + macro notice applied:',edition)
+print('v2 branding + macro notice + old Bolts wording cleanup applied:',edition)
