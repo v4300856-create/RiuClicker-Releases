@@ -1,0 +1,131 @@
+name: Publish RiuClicker PRO 2.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-pro-v2.yml'
+      - '.build/v2/**'
+      - '.build/pro-public/paid_lobby_patch.py'
+      - '.build/pro-public/startup_fix.py'
+      - '.build/pro-public/paid_ui_lobby_fix.py'
+      - '.build/pro-public/restore_app_resources.py'
+      - '.build/pro-public/trace_lobby_patch.py'
+      - '.build/pro-public/persistent_clicker_fix.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-riuclicker-pro-v2
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      RIU_EDITION: PRO
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download clean 5.22 source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          Invoke-WebRequest -Uri 'https://github.com/v4300856-create/RiuClicker-Releases/releases/download/riu-v5.22-restored/RiuClicker-5.22-Source.zip' -OutFile base.zip
+          Expand-Archive base.zip -DestinationPath src -Force
+          if(-not (Test-Path src/RiuClickerCS.csproj)){throw '5.22 source missing'}
+          New-Item -ItemType Directory -Force private-build | Out-Null
+          Copy-Item src/App.xaml private-build/base-App.xaml -Force
+
+      - name: Apply 5.22 core fixes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          python .build/localization520-hotfix.py
+          gh api -H "Accept: application/vnd.github.raw" "/repos/${{ github.repository }}/contents/.build/cps520-hotfix.py?ref=release/5.20-cpsfix" > cps520-hotfix.py
+          python cps520-hotfix.py
+          python .build/ui522-hotfix.py
+
+      - name: Apply PRO system, Lobby and Trace
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python .build/v2/pro_input_helpers.py
+          python .build/pro-public/paid_lobby_patch.py
+          python .build/pro-public/startup_fix.py
+          python .build/pro-public/paid_ui_lobby_fix.py
+          python .build/pro-public/restore_app_resources.py
+          python .build/pro-public/trace_lobby_patch.py
+          python .build/pro-public/persistent_clicker_fix.py
+          python .build/v2/common_ui_macro_v2.py
+          python .build/v2/version_v2.py
+
+      - name: Validate PRO 2.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          [xml](Get-Content src/App.xaml -Raw)|Out-Null
+          [xml](Get-Content src/MainWindow.xaml -Raw)|Out-Null
+          [xml](Get-Content src/PaidActivationWindow.xaml -Raw)|Out-Null
+          [xml](Get-Content src/InterfacePickerWindow.xaml -Raw)|Out-Null
+          foreach($m in @(
+            'PRO LICENSE KEY','ACTIVATE PRO','PaidLicenseService',
+            'PageMacros','MacroKeyHold','MacroModifierHold','MacroStepGap','MacroPointerSettle',
+            'MacroStartDelay','MacroRepeatCount','MacroRepeatDelay','НАЧАТЬ ЗАПИСЬ',
+            'RIU LOBBY','TRACE LOBBY','REQUEST TRACE CONTROL','DisableTraceEmergency',
+            'CLASSIC','COMPACT','NEON','UiModeService.Apply','<Version>2.0.0</Version>'
+          )){
+            if(-not (Get-ChildItem src -Recurse -Include *.cs,*.xaml,*.csproj | Select-String -SimpleMatch $m)){throw "Missing marker: $m"}
+          }
+          if(Get-ChildItem src -Recurse -Include *.cs,*.xaml | Select-String -Pattern 'BOLT PUSH|ENABLE BOLTS|BOLTS ·' ){throw 'Bolts UI/functionality still present'}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build PRO 2.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          dotnet publish src/RiuClickerCS.csproj -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:AssemblyName=RiuClicker-Pro `
+            -p:ApplicationIcon=app.ico `
+            -o out
+          if($LASTEXITCODE -ne 0){throw 'Build failed'}
+          Copy-Item out/RiuClicker-Pro.exe out/RiuClicker-Pro-2.0.exe
+          (Get-FileHash out/RiuClicker-Pro-2.0.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content out/RiuClicker-Pro-2.0.sha256.txt
+
+      - name: Publish PRO 2.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          @(
+            '# RiuClicker PRO 2.0','',
+            '- Manual server-verified PRO keys: 30 / 90 days / Lifetime',
+            '- Original configurable 5.22 macro editor restored',
+            '- Editable key/modifier/step/coordinate/start/repeat delays',
+            '- Macro recording + manual key/mouse/coordinate/delay steps',
+            '- Bolts and Bolt Push removed',
+            '- Three startup interfaces: Classic / Compact / Neon',
+            '- Redesigned PRO activation window',
+            '- PRO exclusive: Lobby + consent-gated Roblox Trace Lobby',
+            '- Persistent autoclicker stability fix'
+          ) | Set-Content notes.md
+          $tag='riu-pro-v2'
+          gh release view $tag *> $null
+          if($LASTEXITCODE -eq 0){
+            gh release upload $tag out/RiuClicker-Pro-2.0.exe out/RiuClicker-Pro-2.0.sha256.txt --clobber
+            gh release edit $tag --title 'RiuClicker PRO 2.0' --notes-file notes.md
+          } else {
+            gh release create $tag out/RiuClicker-Pro-2.0.exe out/RiuClicker-Pro-2.0.sha256.txt --title 'RiuClicker PRO 2.0' --notes-file notes.md --target main
+          }
