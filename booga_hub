@@ -1,18 +1,18 @@
--- BOOGA HUB TEMP NO-KEY LOADER
-local CODE_API = "https://rpbjeexhbanaavazfmpo.supabase.co/functions/v1/booga-code"
+-- BOOGA HUB -> ASTER PREMIUM LOADER
+local ASTER_URL = "https://raw.githubusercontent.com/v4300856-create/RiuClicker-Releases/main/Aster_Premium.lua"
 
 local ok, body = pcall(function()
-    return game:HttpGet(CODE_API)
+    return game:HttpGet(ASTER_URL)
 end)
 
 if not ok or type(body) ~= "string" or #body < 10000 then
-    warn("[BOOGA HUB] Payload unavailable")
+    warn("[BOOGA HUB] Aster payload unavailable")
     return
 end
 
 local fn, err = loadstring(body)
 if not fn then
-    warn("[BOOGA HUB] Payload compile failed: " .. tostring(err))
+    warn("[BOOGA HUB] Aster compile failed: " .. tostring(err))
     return
 end
 
